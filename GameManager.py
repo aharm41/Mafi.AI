@@ -1,5 +1,5 @@
-import PlayerRoles
-import Player
+from PlayerRoles import PlayerRole
+from Player import Player
 
 import random
 
@@ -13,15 +13,15 @@ class GameManager:
     Args:
         playerCount (int): How many players will be playing?
     """
-    def __init__(self, playerCount: int, ) -> None:
+    def __init__(self, playerCount: int) -> None:
         self.playerCount = playerCount
         # How many mafia?
         mafiaCount = playerCount // 4
         playerRolesList = [0] * playerCount
-        playerRolesList[0:mafiaCount] = [PlayerRoles.PlayerRole.MAFIA] * mafiaCount
-        playerRolesList[mafiaCount] = PlayerRoles.PlayerRole.SHERIFF
-        playerRolesList[mafiaCount + 1] = PlayerRoles.PlayerRole.DOCTOR
-        playerRolesList[mafiaCount + 2:] = [PlayerRoles.PlayerRole.INNOCENT] * (playerCount - mafiaCount - 2)
+        playerRolesList[0:mafiaCount] = [PlayerRole.MAFIA] * mafiaCount
+        playerRolesList[mafiaCount] = PlayerRole.SHERIFF
+        playerRolesList[mafiaCount + 1] = PlayerRole.DOCTOR
+        playerRolesList[mafiaCount + 2:] = [PlayerRole.INNOCENT] * (playerCount - mafiaCount - 2)
 
         for i in range(playerCount): # Could just do random.shuffle but I wanted to do it myself
             rand = random.randint(0, playerCount - 1)
@@ -36,15 +36,15 @@ class GameManager:
         self.sheriff = None
         self.doctor = None
         for i in range(playerCount):
-            self.playerList.append(Player.Player(f"Player { i + 1 }", i + 1, playerRolesList[i]))
-            if playerRolesList[i] == PlayerRoles.PlayerRole.MAFIA:
+            self.playerList.append(Player(f"Player { i + 1 }", i + 1, playerRolesList[i]))
+            if playerRolesList[i] == PlayerRole.MAFIA:
                 self.mafiaList.append(self.playerList[i])
             else:
                 self.innocentList.append(self.playerList[i])
 
-            if playerRolesList[i] == PlayerRoles.PlayerRole.SHERIFF:
+            if playerRolesList[i] == PlayerRole.SHERIFF:
                 self.sheriff = self.playerList[i]
-            elif playerRolesList[i] == PlayerRoles.PlayerRole.DOCTOR:
+            elif playerRolesList[i] == PlayerRole.DOCTOR:
                 self.doctor = self.playerList[i]
 
         print(f"GameManager initialized with {playerCount} players.")
@@ -83,6 +83,7 @@ class GameManager:
             3. Sheriff wakes up and investigates someone, returns if they are mafia or nah
             4. Updates the GameState class with the results
         """
+        pass
 
     def dayPhase(self):
         """
@@ -95,10 +96,3 @@ class GameManager:
             5. 
         """
         pass
-        
-
-
-
-testingShit = GameManager(12)
-for i in testingShit.playerList:
-    print(f"{i.name}, number {i.number}, is a {i.role}")
