@@ -75,9 +75,15 @@ class GameManager:
         protectedPlayer = self.doctor.getDoctorPick()
         if (nominatedPlayer != protectedPlayer):
             self.gameState.killPlayer(nominatedPlayer)
-            self.convoManager.addToSummary(f"{nominatedPlayer} was killed by the Mafia.")
+            self.convoManager.addToSummary(f"{nominatedPlayer} was killed by the Mafia.\n")
         else:
-            self.convoManager.addToSummary(f"{protectedPlayer} was protected by the Doctor.")
+            self.convoManager.addToSummary(f"The mafia tried to kill {protectedPlayer}, but the doctor saved him.\n")
+
+        sheriffTarget = self.gameState.getSheriff().investigatePlayer()
+        if sheriffTarget in self.gameState.getMafias():
+            self.gameState.getSheriff().updatePrivSumm(f"{sheriffTarget} is a Mafia member.\n")
+        else:
+            self.gameState.getSheriff().updatePrivSumm(f"{sheriffTarget} is an Innocent member.\n")
 
     def dayPhase(self):
         """
@@ -115,3 +121,18 @@ class GameManager:
         """
         votes = [mafia.castVote() for mafia in self.mafiaList]
         return max(set(votes), key=votes.count)
+    
+    def __str__(self):
+        stringRep = f"GameManager with {len(self.gameState.getPlayerCount())} players, current day: {self.gameState.getDay()}\n"
+        stringRep += f"List of current alive players:\n"
+        for player in self.gameState.getAlivePlayers():
+            stringRep += f"{player}\n"
+
+        return stringRep
+
+    # Testing time
+gameManager = GameManager(8)
+print(gameManager)
+gameManager.nightPhase()
+print(gameManager)
+print(gameManager.convoManager.getConvoSummary())

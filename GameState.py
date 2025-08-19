@@ -17,6 +17,7 @@ class GameState:
         doctor: Player,
     ) -> None:
         self.alivePlayers = players
+        self.playerCount = len(players)
         self.innocents = innocents
         self.mafias = mafias
         self.sheriff = sheriff
@@ -24,6 +25,9 @@ class GameState:
         self.deadPlayers: dict[Player, int] = {}
         self.currentDay = 1
         self.protectedPlayer = None  # Might need to change this to a list at some point
+
+    def getPlayerCount(self) -> int:
+        return self.playerCount
 
     def getAlivePlayers(self) -> list[Player]:
         return self.alivePlayers.copy()
@@ -51,13 +55,17 @@ class GameState:
 
     def killPlayer(self, player: Player) -> None:
         self.alivePlayers.remove(player)
+        if player in self.innocents:
+            self.innocents.remove(player)
+        elif player in self.mafias:
+            self.mafias.remove(player)
         self.deadPlayers[player] = self.currentDay
 
-    def revealPlayer(self, playerNo) -> Roles.PlayerRole:
-        return self.players[playerNo - 1].role
+    def revealPlayer(self, player: Player) -> str:
+        return "Mafia" if player in self.mafias else "Innocent"
 
-    def protectPlayer(self, playerNo) -> None:
-        self.protectedPlayer = self.players[playerNo - 1]
+    def protectPlayer(self, player: Player) -> None:
+        self.protectedPlayer = player
 
     def clearProtection(self) -> None:
         self.protectedPlayer = None

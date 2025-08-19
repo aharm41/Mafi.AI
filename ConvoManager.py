@@ -5,6 +5,8 @@ class ConvoManager:
     """
     Class to manage the conversation, keeping tabs on all the things that have happened previously (will be
     passed to the AI models so they can figure out their next move)
+    Stores a convo summary which is an overall summary for everything that's happened in the game so far,
+    including player actions, votes, and any other relevant information (that ALL players can see)
     """
     def __init__(self):
         self.lastConvo = None

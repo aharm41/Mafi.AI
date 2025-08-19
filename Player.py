@@ -17,6 +17,7 @@ class Player:
         self.number = number
         self.name = name
         self.role = role
+        self.privateSumm = "" # For the sheriff or something
 
     def makeConvo(self, question: str | None, player: "Player") -> tuple[str, int]:
         """
@@ -75,6 +76,15 @@ class Player:
         if self.role != Roles.PlayerRole.DOCTOR:
             raise ValueError("Only Doctor can pick a target.")
         return random.choice(GameState.getAlivePlayers())
+    
+    def investigatePlayer(self) -> None:
+        if self.role != Roles.PlayerRole.SHERIFF:
+            raise ValueError("Only Sheriff can investigate players.")
+        
+        return random.choice(GameState.getInnocents())
+    
+    def updatePrivSumm(self, summ: str) -> None:
+        self.privateSumm += summ + "\n"
 
     def __str__(self) -> str:
-        return self.name
+        return self.name + ", role: " + str(self.role)
