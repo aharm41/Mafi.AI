@@ -48,35 +48,11 @@ class GameManager:
 
         print(f"GameManager initialized with {playerCount} players.")
 
-        deadPlayers = []
         alivePlayers = self.playerList.copy()
 
-        this.gameState = GameState(
+        self.gameState = GameState(
             alivePlayers, self.innocentList, self.mafiaList, self.sheriff, self.doctor
         )
-
-    def getAlivePlayers(self):
-        return self.alivePlayers.copy()
-
-    def getDeadPlayers(self):
-        return self.deadPlayers.copy()
-
-    def getAllPlayers(self):
-        return self.playerList.copy()
-
-    def getSheriff(self):
-        return self.sheriff
-
-    def getDoctor(self):
-        return self.doctor
-
-    def getMafia(self):
-        return self.mafiaList
-
-    # This returns all innocent players as well as sherrif and doctor since
-    # they play on the same team
-    def getInnocents(self):
-        return self.innocentList
 
     def nightPhase(self):
         """

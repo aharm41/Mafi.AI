@@ -16,7 +16,7 @@ class GameState:
         sheriff: Player,
         doctor: Player,
     ) -> None:
-        self.alivePlayers = self.players = players
+        self.alivePlayers = players
         self.innocents = innocents
         self.mafias = mafias
         self.sheriff = sheriff
