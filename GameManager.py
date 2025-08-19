@@ -1,5 +1,6 @@
 from PlayerRoles import PlayerRole
 from Player import Player
+from GameState import GameState
 
 import random
 
@@ -18,7 +19,6 @@ class GameManager:
     """
 
     def __init__(self, playerCount: int) -> None:
-        self.playerCount = playerCount
         # How many mafia?
         mafiaCount = playerCount // 4
         playerRolesList = [0] * playerCount
@@ -29,20 +29,9 @@ class GameManager:
             playerCount - mafiaCount - 2
         )
 
-        for i in range(
-            playerCount
-        ):  # Could just do random.shuffle but I wanted to do it myself
-            rand = random.randint(0, playerCount - 1)
-            temp = playerRolesList[playerCount - 1 - i]
-            playerRolesList[playerCount - 1 - i] = playerRolesList[rand]
-            playerRolesList[rand] = temp
+        random.shuffle(playerRolesList)
 
         # Assign roles to players, keep track of each team
-        self.playerList = []
-        self.mafiaList = []
-        self.innocentList = []
-        self.sheriff = None
-        self.doctor = None
         for i in range(playerCount):
             self.playerList.append(
                 Player(f"Player { i + 1 }", i + 1, playerRolesList[i])
@@ -59,8 +48,12 @@ class GameManager:
 
         print(f"GameManager initialized with {playerCount} players.")
 
-        self.deadPlayers = []
-        self.alivePlayers = self.playerList.copy()
+        deadPlayers = []
+        alivePlayers = self.playerList.copy()
+
+        this.gameState = GameState(
+            alivePlayers, self.innocentList, self.mafiaList, self.sheriff, self.doctor
+        )
 
     def getAlivePlayers(self):
         return self.alivePlayers.copy()

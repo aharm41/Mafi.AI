@@ -8,6 +8,10 @@ from GameManager import GameManager
 def gameManager9():
     return GameManager(9)
 
+@pytest.fixture
+def gameManager15():
+    return GameManager(15)
+
 
 def test_playerCount(gameManager9):
     assert len(gameManager9.getAllPlayers()) == 9
@@ -23,3 +27,8 @@ def test_validMafiaPlayers(gameManager9):  # SHOULD BE 2 MAFIA
         1 for player in gameManager9.getAllPlayers() if player.role == PlayerRole.MAFIA
     )
     assert mafiaCount == 2
+
+
+def test_validMafiaPlayers2(gameManager15):
+    mafiaCount = sum(1 for player in gameManager15.getAllPlayers() if player.role == PlayerRole.MAFIA)
+    assert mafiaCount == 3

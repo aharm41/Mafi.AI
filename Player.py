@@ -1,4 +1,5 @@
 import PlayerRoles as Roles
+from GameState import GameState
 import random
 
 
@@ -33,15 +34,13 @@ class Player:
             random.randint(1, 8),
         )  # Please Change this.
 
-    def castVote(self) -> int:
+    def castVote(self) -> 'Player':
         """
         Based on the previous conversation, make a vote.
 
-        Currently just votes for itself lol
-
-        Returns: NUMBER of player to be voted out
+        Returns: Player to be voted out
         """
-        return random.randint(1, 8)  # Randomly votes for a player
+        return GameState.getAlivePlayers[random.randint(0, len(GameState.getAlivePlayers) - 1)]  # Randomly votes for a player
 
     def castSecondVote(self, nominatedPlayers: tuple[int, int]) -> tuple[bool, bool]:
         """
@@ -62,3 +61,6 @@ class Player:
         Returns: Your conversational defense to all the players
         """
         return "I am not part of the Mafia! I swear it!"
+
+    def __str__(self) -> str:
+        return f"Player {self.number}: {self.name} ({self.role})"
