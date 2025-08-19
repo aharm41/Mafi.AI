@@ -1,6 +1,7 @@
 from PlayerRoles import PlayerRole
 from Player import Player
 from GameState import GameState
+from ConvoManager import ConvoManager
 
 import random
 
@@ -30,52 +31,87 @@ class GameManager:
         )
 
         random.shuffle(playerRolesList)
+        playerList = []
+        mafiaList = []
+        innocentList = []
+        doctor = None
+        sheriff = None
 
         # Assign roles to players, keep track of each team
         for i in range(playerCount):
-            self.playerList.append(
+            playerList.append(
                 Player(f"Player { i + 1 }", i + 1, playerRolesList[i])
             )
             if playerRolesList[i] == PlayerRole.MAFIA:
-                self.mafiaList.append(self.playerList[i])
+                mafiaList.append(self.playerList[i])
             else:
-                self.innocentList.append(self.playerList[i])
+                innocentList.append(self.playerList[i])
 
             if playerRolesList[i] == PlayerRole.SHERIFF:
-                self.sheriff = self.playerList[i]
+                sheriff = self.playerList[i]
             elif playerRolesList[i] == PlayerRole.DOCTOR:
-                self.doctor = self.playerList[i]
+                doctor = self.playerList[i]
 
         print(f"GameManager initialized with {playerCount} players.")
 
-        alivePlayers = self.playerList.copy()
-
         self.gameState = GameState(
-            alivePlayers, self.innocentList, self.mafiaList, self.sheriff, self.doctor
+            playerList, innocentList, mafiaList, sheriff, doctor
         )
+        self.convoManager = ConvoManager()
 
     def nightPhase(self):
         """
         Night phase logic goes here.
             STEPS TO DO:
-            1. Mayor wakes up mafia and they choose their target
-            2. Doctor wakes up and chooses which player is immune
-            3. Sheriff wakes up and investigates someone, returns if
+            1. Update convo manager with "Night [i]:"
+            2. Mayor wakes up mafia and they choose their target
+            3. Doctor wakes up and chooses which player is immune
+            4. Sheriff wakes up and investigates someone, returns if
             they are mafia or nah
             4. Updates the GameState class with the results
         """
-        pass
+        self.convoManager.addToSummary(f"Night {self.gameState.getDay()}:")
+        nominatedPlayer = self.getMafiaVotes()
+        protectedPlayer = self.doctor.getDoctorPick()
+        if (nominatedPlayer != protectedPlayer):
+            self.gameState.killPlayer(nominatedPlayer)
+            self.convoManager.addToSummary(f"{nominatedPlayer} was killed by the Mafia.")
+        else:
+            self.convoManager.addToSummary(f"{protectedPlayer} was protected by the Doctor.")
 
     def dayPhase(self):
         """
         Day phase logic goes here.
             STEPS TO DO:
-            1. Get the Game State from last night, ask about what
+            1. Update convo manager with "Day [i]:"
+            2. Get the Game State from last night, ask about what
               happened last night
-            2. Initiate a conversation with the players and start timer
+            3. Initiate a conversation with the players and start timer
               at same time
-            3. After timer has finished, get the votes from the players
-            4. Voted people have a chance to defend themselves
-            5.
+            4. After timer has finished, get the votes from the players
+            5. Voted people have a chance to defend themselves
         """
         pass
+
+    def getMafiaVotes(self) -> Player:
+        """
+        Get the votes from the mafia players, and return the player
+        that they want to vote out.
+
+        change it so the it does the following:
+
+        1. Start Time
+        2. Query all mafia players for their first suggested vote
+        3. Update convo manager with suggested votes
+        4. Query all mafia players for their final decision given the suggested votes,
+        going one at a time
+        5. Return the player that received the most votes
+        6. If there is a tie, randomly select one of the tied players.
+        7. If timer runs out, pick the suggested votes from each Mafia player,
+        if didn't make a suggestion, just fucking pick any random motherfucker
+        8. Update the GameState with the final votes.
+
+        Returns: Player to be voted out
+        """
+        votes = [mafia.castVote() for mafia in self.mafiaList]
+        return max(set(votes), key=votes.count)

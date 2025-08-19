@@ -61,6 +61,20 @@ class Player:
         Returns: Your conversational defense to all the players
         """
         return "I am not part of the Mafia! I swear it!"
+    
+    def pickTarget(self) -> 'Player':
+        """
+        As a Mafia player, pick a target, throw an error if not Mafia
+        """
+        if self.role != Roles.PlayerRole.MAFIA:
+            raise ValueError("Only Mafia can pick a target.")
+        
+        return random.choice(GameState.getAlivePlayers())
+    
+    def getDoctorPick(self) -> 'Player':
+        if self.role != Roles.PlayerRole.DOCTOR:
+            raise ValueError("Only Doctor can pick a target.")
+        return random.choice(GameState.getAlivePlayers())
 
     def __str__(self) -> str:
-        return f"Player {self.number}: {self.name} ({self.role})"
+        return self.name

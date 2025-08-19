@@ -21,7 +21,7 @@ class GameState:
         self.mafias = mafias
         self.sheriff = sheriff
         self.doctor = doctor
-        self.deadPlayers = []
+        self.deadPlayers: dict[Player, int] = {}
         self.currentDay = 1
         self.protectedPlayer = None  # Might need to change this to a list at some point
 
@@ -51,7 +51,7 @@ class GameState:
 
     def killPlayer(self, player: Player) -> None:
         self.alivePlayers.remove(player)
-        self.deadPlayers.append(player)
+        self.deadPlayers[player] = self.currentDay
 
     def revealPlayer(self, playerNo) -> Roles.PlayerRole:
         return self.players[playerNo - 1].role

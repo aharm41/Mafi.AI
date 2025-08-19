@@ -31,3 +31,6 @@ class ConvoManager:
     def addConvo(self, convo: str) -> None:
         self.convoSummary += self.summariseConvo() + "\n"
         self.lastConvo = convo
+
+    def addToSummary(self, convo: str) -> None:
+        self.convoSummary += convo + "\n"
