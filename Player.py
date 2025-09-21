@@ -1,11 +1,10 @@
 import PlayerRoles as Roles
-from GameState import GameState
 import random
 
 
 class Player:
     """
-    Player class. Human and AI Players inherit from this CUNT.
+    Player class. Human and AI Players inherit from this.
     """
 
     def __init__(
@@ -17,7 +16,7 @@ class Player:
         self.number = number
         self.name = name
         self.role = role
-        self.privateSumm = "" # For the sheriff or something
+        self.privateSumm = ""  # For the sheriff or something
 
     def makeConvo(self, question: str | None, player: "Player") -> tuple[str, int]:
         """
@@ -35,13 +34,16 @@ class Player:
             random.randint(1, 8),
         )  # Please Change this.
 
-    def castVote(self) -> 'Player':
+    def castVote(self) -> "Player":
+        from GameManager import GameState
         """
         Based on the previous conversation, make a vote.
 
         Returns: Player to be voted out
         """
-        return GameState.getAlivePlayers[random.randint(0, len(GameState.getAlivePlayers) - 1)]  # Randomly votes for a player
+        return GameState.getAlivePlayers[
+            random.randint(0, len(GameState.getAlivePlayers) - 1)
+        ]  # Randomly votes for a player
 
     def castSecondVote(self, nominatedPlayers: tuple[int, int]) -> tuple[bool, bool]:
         """
@@ -62,27 +64,32 @@ class Player:
         Returns: Your conversational defense to all the players
         """
         return "I am not part of the Mafia! I swear it!"
-    
-    def pickTarget(self) -> 'Player':
+
+    def pickTarget(self) -> "Player":
+        from GameManager import GameState
         """
         As a Mafia player, pick a target, throw an error if not Mafia
         """
         if self.role != Roles.PlayerRole.MAFIA:
             raise ValueError("Only Mafia can pick a target.")
-        
+
         return random.choice(GameState.getAlivePlayers())
-    
-    def getDoctorPick(self) -> 'Player':
+
+    def getDoctorPick(self) -> "Player":
+        from GameManager import GameState
+
         if self.role != Roles.PlayerRole.DOCTOR:
             raise ValueError("Only Doctor can pick a target.")
         return random.choice(GameState.getAlivePlayers())
-    
+
     def investigatePlayer(self) -> None:
+        from GameManager import GameState
+
         if self.role != Roles.PlayerRole.SHERIFF:
             raise ValueError("Only Sheriff can investigate players.")
-        
+
         return random.choice(GameState.getInnocents())
-    
+
     def updatePrivSumm(self, summ: str) -> None:
         self.privateSumm += summ + "\n"
 

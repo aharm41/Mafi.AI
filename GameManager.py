@@ -1,10 +1,9 @@
 from PlayerRoles import PlayerRole
 from Player import Player
-from GameState import GameState
 from ConvoManager import ConvoManager
+from GameState import GameState
 
 import random
-
 
 class GameManager:
     """
@@ -39,25 +38,24 @@ class GameManager:
 
         # Assign roles to players, keep track of each team
         for i in range(playerCount):
-            playerList.append(
-                Player(f"Player { i + 1 }", i + 1, playerRolesList[i])
-            )
+            playerList.append(Player(f"Player { i + 1 }", i + 1, playerRolesList[i]))
             if playerRolesList[i] == PlayerRole.MAFIA:
-                mafiaList.append(self.playerList[i])
+                mafiaList.append(playerList[i])
             else:
-                innocentList.append(self.playerList[i])
+                innocentList.append(playerList[i])
 
             if playerRolesList[i] == PlayerRole.SHERIFF:
-                sheriff = self.playerList[i]
+                sheriff = playerList[i]
             elif playerRolesList[i] == PlayerRole.DOCTOR:
-                doctor = self.playerList[i]
+                doctor = playerList[i]
 
         print(f"GameManager initialized with {playerCount} players.")
 
-        self.gameState = GameState(
-            playerList, innocentList, mafiaList, sheriff, doctor
-        )
+        self.gameState = GameState(playerList, innocentList, mafiaList, sheriff, doctor)
         self.convoManager = ConvoManager()
+
+    def getGameState(self):
+        return self.gameState
 
     def nightPhase(self):
         """
@@ -70,20 +68,28 @@ class GameManager:
             they are mafia or nah
             4. Updates the GameState class with the results
         """
-        self.convoManager.addToSummary(f"Night {self.gameState.getDay()}:")
+        self.convoManager.addToSummary(f"Night {str(self.gameState.getDay())}:")
         nominatedPlayer = self.getMafiaVotes()
         protectedPlayer = self.doctor.getDoctorPick()
-        if (nominatedPlayer != protectedPlayer):
+        if nominatedPlayer != protectedPlayer:
             self.gameState.killPlayer(nominatedPlayer)
-            self.convoManager.addToSummary(f"{nominatedPlayer} was killed by the Mafia.\n")
+            self.convoManager.addToSummary(
+                f"{nominatedPlayer} was killed by the Mafia.\n"
+            )
         else:
-            self.convoManager.addToSummary(f"The mafia tried to kill {protectedPlayer}, but the doctor saved him.\n")
+            self.convoManager.addToSummary(
+                f"The mafia tried to kill {protectedPlayer}, but the doctor saved him.\n"
+            )
 
         sheriffTarget = self.gameState.getSheriff().investigatePlayer()
         if sheriffTarget in self.gameState.getMafias():
-            self.gameState.getSheriff().updatePrivSumm(f"{sheriffTarget} is a Mafia member.\n")
+            self.gameState.getSheriff().updatePrivSumm(
+                f"{sheriffTarget} is a Mafia member.\n"
+            )
         else:
-            self.gameState.getSheriff().updatePrivSumm(f"{sheriffTarget} is an Innocent member.\n")
+            self.gameState.getSheriff().updatePrivSumm(
+                f"{sheriffTarget} is an Innocent member.\n"
+            )
 
     def dayPhase(self):
         """
@@ -119,20 +125,13 @@ class GameManager:
 
         Returns: Player to be voted out
         """
-        votes = [mafia.castVote() for mafia in self.mafiaList]
+        votes = [mafia.castVote() for mafia in self.gameState.getMafias()]
         return max(set(votes), key=votes.count)
-    
+
     def __str__(self):
-        stringRep = f"GameManager with {len(self.gameState.getPlayerCount())} players, current day: {self.gameState.getDay()}\n"
+        stringRep = f"GameManager with {self.gameState.getPlayerCount()} players, current day: {self.gameState.getDay()}\n"
         stringRep += f"List of current alive players:\n"
         for player in self.gameState.getAlivePlayers():
             stringRep += f"{player}\n"
 
         return stringRep
-
-    # Testing time
-gameManager = GameManager(8)
-print(gameManager)
-gameManager.nightPhase()
-print(gameManager)
-print(gameManager.convoManager.getConvoSummary())

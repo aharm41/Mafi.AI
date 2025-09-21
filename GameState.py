@@ -1,6 +1,4 @@
-from Player import Player
-from PlayerRoles import Roles
-
+from Player import Player;
 
 class GameState:
     """
@@ -22,9 +20,14 @@ class GameState:
         self.mafias = mafias
         self.sheriff = sheriff
         self.doctor = doctor
-        self.deadPlayers: dict[Player, int] = {}
+        self.deadPlayers: dict[Player, int] = {} # Trackes date of death
         self.currentDay = 1
         self.protectedPlayer = None  # Might need to change this to a list at some point
+
+    def getAllPlayers(self) -> list[Player]:
+        totalList = self.alivePlayers.copy()
+        totalList.extend(list(self.deadPlayers.keys()))
+        return totalList
 
     def getPlayerCount(self) -> int:
         return self.playerCount
@@ -45,7 +48,7 @@ class GameState:
         return self.doctor
 
     def getDeadPlayers(self) -> list[Player]:
-        return self.deadPlayers.copy()
+        return list(self.deadPlayers.keys()).copy()
 
     def getDay(self) -> int:
         return self.currentDay
