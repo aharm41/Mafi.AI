@@ -2,6 +2,7 @@ from PlayerRoles import PlayerRole
 from Player import Player
 from ConvoManager import ConvoManager
 from GameState import GameState
+import logging
 
 import random
 
@@ -19,6 +20,16 @@ class GameManager:
     """
 
     def __init__(self, playerCount: int) -> None:
+        logger = logging.getLogger("__name__")
+        logging.basicConfig(filename='game.log', level=logging.DEBUG)
+        logger.setLevel(logging.DEBUG)
+
+        fh = logging.FileHandler('game.log')
+        fh.setLevel(logging.DEBUG)
+
+        logger.addHandler(fh)
+
+
         # How many mafia?
         mafiaCount = playerCount // 4
         playerRolesList = [0] * playerCount
@@ -67,10 +78,15 @@ class GameManager:
             4. Sheriff wakes up and investigates someone, returns if
             they are mafia or nah
             4. Updates the GameState class with the results
+            5. Increment day
         """
         self.convoManager.addToSummary(f"Night {str(self.gameState.getDay())}:")
+        alivePlayers = self.gameState.getAlivePlayers()
         nominatedPlayer = self.getMafiaVotes()
-        protectedPlayer = self.doctor.getDoctorPick()
+        protectedPlayer = self.gameState.getDoctor().getDoctorPick(alivePlayers)
+        logging.debug(f"Protected Player: {protectedPlayer}")
+        logging.debug(f"Nominated Player: {nominatedPlayer}")
+
         if nominatedPlayer != protectedPlayer:
             self.gameState.killPlayer(nominatedPlayer)
             self.convoManager.addToSummary(
@@ -81,15 +97,18 @@ class GameManager:
                 f"The mafia tried to kill {protectedPlayer}, but the doctor saved him.\n"
             )
 
-        sheriffTarget = self.gameState.getSheriff().investigatePlayer()
-        if sheriffTarget in self.gameState.getMafias():
-            self.gameState.getSheriff().updatePrivSumm(
-                f"{sheriffTarget} is a Mafia member.\n"
-            )
-        else:
-            self.gameState.getSheriff().updatePrivSumm(
-                f"{sheriffTarget} is an Innocent member.\n"
-            )
+        if (not self.getGameState().isSheriffDead()):
+            sheriffTarget = self.gameState.getSheriff().investigatePlayer(alivePlayers)
+            if sheriffTarget in self.gameState.getMafias():
+                self.gameState.getSheriff().updatePrivSumm(
+                    f"{sheriffTarget} is a Mafia member.\n"
+                )
+            else:
+                self.gameState.getSheriff().updatePrivSumm(
+                    f"{sheriffTarget} is an Innocent member.\n"
+                )
+        self.gameState.clearProtection()
+        self.gameState.nextDay()
 
     def dayPhase(self):
         """
@@ -100,10 +119,10 @@ class GameManager:
               happened last night
             3. Initiate a conversation with the players and start timer
               at same time
-            4. After timer has finished, get the votes from the players
+            4. After timer has finished, get the votes from the players 
             5. Voted people have a chance to defend themselves
         """
-        pass
+        self.convoManager.addToSummary(f"Day {str(self.gameState.getDay())}:")
 
     def getMafiaVotes(self) -> Player:
         """
@@ -125,13 +144,27 @@ class GameManager:
 
         Returns: Player to be voted out
         """
-        votes = [mafia.castVote() for mafia in self.gameState.getMafias()]
+        alivePlayers = self.gameState.getInnocents()
+
+        votes = [mafia.pickTarget(alivePlayers) for mafia in self.gameState.getMafias()]
         return max(set(votes), key=votes.count)
 
     def __str__(self):
         stringRep = f"GameManager with {self.gameState.getPlayerCount()} players, current day: {self.gameState.getDay()}\n"
         stringRep += f"List of current alive players:\n"
-        for player in self.gameState.getAlivePlayers():
+        for player in self.gameState.getInnocents():
             stringRep += f"{player}\n"
 
         return stringRep
+
+
+gameManager9 = GameManager(9)
+
+funnyFile = open('funnyFile.txt', 'w')
+print(gameManager9.getGameState(), file=funnyFile)
+
+gameManager9.nightPhase()
+print(gameManager9.getGameState(), file=funnyFile)
+
+
+funnyFile.close()

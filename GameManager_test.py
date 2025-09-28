@@ -1,6 +1,7 @@
 import pytest
 from PlayerRoles import PlayerRole
 from Player import Player
+from GameState import PlayerNotFoundError
 from GameManager import GameManager
 
 @pytest.fixture
@@ -38,10 +39,49 @@ def testValidMafiaPlayers2(gameManager15):
     mafiaCount = sum(1 for player in gameManager15.getGameState().getAllPlayers() if player.role == PlayerRole.MAFIA)
     assert mafiaCount == 3
 
-def killPlayer(gameManager9):
+def testKillPlayer(gameManager9):
     gameState = gameManager9.getGameState()
     player1 = gameState.getAlivePlayers()[0]
     gameState.killPlayer(player1)
     assert len(gameState.getAlivePlayers()) == 8
     assert len(gameState.getDeadPlayers()) == 1
     assert sum([x for x in gameState.getAlivePlayers() if x == player1]) == 0
+    assert gameState.getDeadPlayers()[0] == player1
+
+def testKillMultiplePlayers(gameManager9):
+    gameState = gameManager9.getGameState()
+    players = gameState.getAlivePlayers()[:3]  # kill first 3 players
+    for p in players:
+        gameState.killPlayer(p)
+    assert len(gameState.getAlivePlayers()) == 6
+    assert len(gameState.getDeadPlayers()) == 3
+    for p in players:
+        assert p in gameState.getDeadPlayers()
+        assert p not in gameState.getAlivePlayers()
+
+def testKillSamePlayerTwice(gameManager9):
+    gameState = gameManager9.getGameState()
+    player = gameState.getAlivePlayers()[0]
+    gameState.killPlayer(player)
+    beforeDeadCount = len(gameState.getDeadPlayers())
+    with pytest.raises(PlayerNotFoundError):
+        gameState.killPlayer(player)
+
+def testProtectAndClear(gameManager9):
+    gameState = gameManager9.getGameState()
+    player = gameState.getAlivePlayers()[0]
+    gameState.protectPlayer(player)
+    assert gameState.protectedPlayer == player
+    gameState.clearProtection()
+    assert gameState.protectedPlayer == None
+
+def testDay(gameManager9):
+    gameState = gameManager9.getGameState()
+    gameState.nextDay()
+    gameState.nextDay()
+    gameState.nextDay()
+    assert(gameState.getDay() == 4)
+
+def testNightPhase(gameManager9):
+    gameState = gameManager9.getGameState()
+    gameManager9.nightPhase()

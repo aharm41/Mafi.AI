@@ -1,4 +1,5 @@
 import PlayerRoles as Roles
+import logging
 import random
 
 
@@ -13,6 +14,15 @@ class Player:
         number: int = 1,
         role: Roles.PlayerRole = Roles.PlayerRole.INNOCENT,
     ) -> None:
+        logger = logging.getLogger("__name__")
+        logging.basicConfig(filename='gameState.log', level=logging.INFO)
+        logger.setLevel(logging.DEBUG)
+
+        fh = logging.FileHandler('game.log')
+        fh.setLevel(logging.DEBUG)
+
+        logger.addHandler(fh)
+
         self.number = number
         self.name = name
         self.role = role
@@ -34,16 +44,15 @@ class Player:
             random.randint(1, 8),
         )  # Please Change this.
 
-    def castVote(self) -> "Player":
-        from GameManager import GameState
+    def castVote(self, alivePlayers: list["Player"]) -> "Player":
         """
         Based on the previous conversation, make a vote.
 
         Returns: Player to be voted out
         """
-        return GameState.getAlivePlayers[
-            random.randint(0, len(GameState.getAlivePlayers) - 1)
-        ]  # Randomly votes for a player
+        choice = random.randint(0, len(alivePlayers) - 1)
+        print(f"I voted for player {alivePlayers[choice]}")
+        return alivePlayers[choice]  # Randomly votes for a player
 
     def castSecondVote(self, nominatedPlayers: tuple[int, int]) -> tuple[bool, bool]:
         """
@@ -51,7 +60,7 @@ class Player:
 
         Args: nominatedPlayers: A tuple containing the two numbers of the two players nominated
 
-        Returns: true or false whether or not we want to eject,
+        Returns: true or false whether or not we want to eject the player
         """
         return [random.choice([True, False]), random.choice([True, False])]
 
@@ -65,30 +74,32 @@ class Player:
         """
         return "I am not part of the Mafia! I swear it!"
 
-    def pickTarget(self) -> "Player":
-        from GameManager import GameState
+    def pickTarget(self, innocentPlayers: list["Player"]) -> "Player":
         """
         As a Mafia player, pick a target, throw an error if not Mafia
         """
         if self.role != Roles.PlayerRole.MAFIA:
             raise ValueError("Only Mafia can pick a target.")
 
-        return random.choice(GameState.getAlivePlayers())
+        choice = random.randint(0, len(innocentPlayers) - 1)
+        print(f"I'm going to kill {innocentPlayers[choice]}")
+        return innocentPlayers[choice]
 
-    def getDoctorPick(self) -> "Player":
-        from GameManager import GameState
-
+    def getDoctorPick(self, alivePlayers: list["Player"]) -> "Player":
         if self.role != Roles.PlayerRole.DOCTOR:
             raise ValueError("Only Doctor can pick a target.")
-        return random.choice(GameState.getAlivePlayers())
+            
+        protectedPlayer = random.choice(alivePlayers)
+        logging.debug(f'I, the doctor, {self}, am protecting {protectedPlayer}')
+        return protectedPlayer
 
-    def investigatePlayer(self) -> None:
-        from GameManager import GameState
-
+    def investigatePlayer(self, alivePlayers: list["Player"]) -> None:
         if self.role != Roles.PlayerRole.SHERIFF:
             raise ValueError("Only Sheriff can investigate players.")
 
-        return random.choice(GameState.getInnocents())
+        investigatedPlayer = random.choice(alivePlayers)
+        logging.debug(f'I, the Sherrif, {self}, am about to investigate {investigatedPlayer}')
+        return investigatedPlayer
 
     def updatePrivSumm(self, summ: str) -> None:
         self.privateSumm += summ + "\n"

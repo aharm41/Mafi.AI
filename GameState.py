@@ -1,4 +1,6 @@
-from Player import Player;
+from Player import Player
+import logging
+
 
 class GameState:
     """
@@ -14,13 +16,24 @@ class GameState:
         sheriff: Player,
         doctor: Player,
     ) -> None:
+        logger = logging.getLogger("__name__")
+        logging.basicConfig(filename='gameState.log', level=logging.INFO)
+        logger.setLevel(logging.DEBUG)
+
+        fh = logging.FileHandler('game.log')
+        fh.setLevel(logging.DEBUG)
+
+        logger.addHandler(fh)
+
         self.alivePlayers = players
         self.playerCount = len(players)
         self.innocents = innocents
         self.mafias = mafias
         self.sheriff = sheriff
+        self.sheriffDead = False
         self.doctor = doctor
-        self.deadPlayers: dict[Player, int] = {} # Trackes date of death
+        self.doctorDead = False
+        self.deadPlayers: dict[Player, int] = {}  # Trackes date of death
         self.currentDay = 1
         self.protectedPlayer = None  # Might need to change this to a list at some point
 
@@ -56,13 +69,28 @@ class GameState:
     def nextDay(self) -> None:
         self.currentDay += 1
 
+    def isSheriffDead(self) -> bool:
+        return self.sheriffDead
+    
+    def isDoctorDead(self) -> bool:
+        return self.doctorDead
+
     def killPlayer(self, player: Player) -> None:
+        if player not in self.alivePlayers:
+            raise PlayerNotFoundError(
+                f"Tried to kill Player {player} but player is not in alive players"
+            )
+        logging.info(f"Player {player} has been killed on day {self.currentDay}")
         self.alivePlayers.remove(player)
         if player in self.innocents:
             self.innocents.remove(player)
         elif player in self.mafias:
             self.mafias.remove(player)
         self.deadPlayers[player] = self.currentDay
+        if player == self.sheriff:
+            self.sheriffDead = True
+        if player == self.doctor:
+            self.doctorDead = True
 
     def revealPlayer(self, player: Player) -> str:
         return "Mafia" if player in self.mafias else "Innocent"
@@ -72,3 +100,16 @@ class GameState:
 
     def clearProtection(self) -> None:
         self.protectedPlayer = None
+
+    def __str__(self) -> str:
+        state = f"Day: {self.currentDay}\n"
+        state += f"Alive Players ({len(self.alivePlayers)}): {[str(player) for player in self.alivePlayers]}\n"
+        state += f"Innocents ({len(self.innocents)}): {[str(player) for player in self.innocents]}\n"
+        state += f"Mafias ({len(self.mafias)}): {[str(player) for player in self.mafias]}\n"
+        state += f"Sheriff: {self.sheriff}\n"
+        state += f"Doctor: {self.doctor}\n"
+        state += f"Dead Players ({len(self.deadPlayers)}): {[str(player) + ' (Day ' + str(day) + ')' for player, day in self.deadPlayers.items()]}\n"
+        return state
+
+class PlayerNotFoundError(Exception):
+    pass
