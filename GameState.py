@@ -17,10 +17,10 @@ class GameState:
         doctor: Player,
     ) -> None:
         logger = logging.getLogger("__name__")
-        logging.basicConfig(filename='gameState.log', level=logging.INFO)
+        logging.basicConfig(filename="gameState.log", level=logging.INFO)
         logger.setLevel(logging.DEBUG)
 
-        fh = logging.FileHandler('game.log')
+        fh = logging.FileHandler("game.log")
         fh.setLevel(logging.DEBUG)
 
         logger.addHandler(fh)
@@ -71,7 +71,7 @@ class GameState:
 
     def isSheriffDead(self) -> bool:
         return self.sheriffDead
-    
+
     def isDoctorDead(self) -> bool:
         return self.doctorDead
 
@@ -102,14 +102,35 @@ class GameState:
         self.protectedPlayer = None
 
     def __str__(self) -> str:
-        state = f"Day: {self.currentDay}\n"
+        state = "---------------\n"
+        state += "GAME STATE \n"
+        state += f"Day: {self.currentDay}\n"
         state += f"Alive Players ({len(self.alivePlayers)}): {[str(player) for player in self.alivePlayers]}\n"
         state += f"Innocents ({len(self.innocents)}): {[str(player) for player in self.innocents]}\n"
-        state += f"Mafias ({len(self.mafias)}): {[str(player) for player in self.mafias]}\n"
+        state += (
+            f"Mafias ({len(self.mafias)}): {[str(player) for player in self.mafias]}\n"
+        )
         state += f"Sheriff: {self.sheriff}\n"
         state += f"Doctor: {self.doctor}\n"
         state += f"Dead Players ({len(self.deadPlayers)}): {[str(player) + ' (Day ' + str(day) + ')' for player, day in self.deadPlayers.items()]}\n"
+        state += "---------------"
+
         return state
+
+    def checkPlayerWin(self) -> bool:
+        if len(self.mafias) == 0:
+            logging.info("Zero mafias left, innocents win!")
+            return True
+        return False
+
+    def checkMafiaWin(self) -> bool:
+        if len(self.mafias) >= len(self.innocents):
+            logging.info(
+                "The mafias are at least equal in number to innocents, mafias win!"
+            )
+            return True
+        return False
+
 
 class PlayerNotFoundError(Exception):
     pass

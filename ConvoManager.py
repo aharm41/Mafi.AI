@@ -8,11 +8,14 @@ class ConvoManager:
     passed to the AI models so they can figure out their next move)
     Stores a convo summary which is an overall summary for everything that's happened in the game so far,
     including player actions, votes, and any other relevant information (that ALL players can see)
+    
+    'Last convo' should refer to the previous night and day. So, should be cleared at the end of a day but 
+    NOT at the end of a night.
     """
 
     def __init__(self):
-        self.lastConvo = None
-        self.convoSummary = ""
+        self.lastConvo = ''
+        self.convoSummary = ''
 
     def getLastConvo(self) -> str | None:
         return self.lastConvo
@@ -21,23 +24,23 @@ class ConvoManager:
         return self.convoSummary
 
     def clearConvo(self) -> None:
-        self.lastConvo = None
+        self.lastConvo = ''
 
     def summariseConvo(self) -> str:
-        if self.lastConvo == None:
-            return ""
+        if self.lastConvo == '':
+            return ''
         else:
             return self.lastConvo[
                 :30
-            ]  # Return up to 30th character for now, gott change
+            ]  # Return up to 30th character for now, gotta change
 
     """
     Summarises the previous convo, and then adds the new convo to the history.
     """
 
     def addConvo(self, convo: str) -> None:
-        self.convoSummary += self.summariseConvo() + "\n"
-        self.lastConvo = convo
+        self.convoSummary += convo + '\n'
+        self.lastConvo += convo + '\n'
 
     def addToSummary(self, convo: str) -> None:
-        self.convoSummary += convo + "\n"
+        self.convoSummary += convo + '\n'

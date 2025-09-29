@@ -6,6 +6,7 @@ import logging
 
 import random
 
+
 class GameManager:
     """
     Game Manager acts like that mayor would. They control the game,
@@ -21,14 +22,13 @@ class GameManager:
 
     def __init__(self, playerCount: int) -> None:
         logger = logging.getLogger("__name__")
-        logging.basicConfig(filename='game.log', level=logging.DEBUG)
+        logging.basicConfig(filename="game.log", level=logging.DEBUG)
         logger.setLevel(logging.DEBUG)
 
-        fh = logging.FileHandler('game.log')
+        fh = logging.FileHandler("game.log")
         fh.setLevel(logging.DEBUG)
 
         logger.addHandler(fh)
-
 
         # How many mafia?
         mafiaCount = playerCount // 4
@@ -80,7 +80,7 @@ class GameManager:
             4. Updates the GameState class with the results
             5. Increment day
         """
-        self.convoManager.addToSummary(f"Night {str(self.gameState.getDay())}:")
+        self.convoManager.addConvo(f"Night {str(self.gameState.getDay())}:")
         alivePlayers = self.gameState.getAlivePlayers()
         nominatedPlayer = self.getMafiaVotes()
         protectedPlayer = self.gameState.getDoctor().getDoctorPick(alivePlayers)
@@ -89,15 +89,13 @@ class GameManager:
 
         if nominatedPlayer != protectedPlayer:
             self.gameState.killPlayer(nominatedPlayer)
-            self.convoManager.addToSummary(
-                f"{nominatedPlayer} was killed by the Mafia.\n"
-            )
+            self.convoManager.addConvo(f"{nominatedPlayer} was killed by the Mafia.\n")
         else:
-            self.convoManager.addToSummary(
+            self.convoManager.addConvo(
                 f"The mafia tried to kill {protectedPlayer}, but the doctor saved him.\n"
             )
 
-        if (not self.getGameState().isSheriffDead()):
+        if not self.getGameState().isSheriffDead():
             sheriffTarget = self.gameState.getSheriff().investigatePlayer(alivePlayers)
             if sheriffTarget in self.gameState.getMafias():
                 self.gameState.getSheriff().updatePrivSumm(
@@ -119,10 +117,129 @@ class GameManager:
               happened last night
             3. Initiate a conversation with the players and start timer
               at same time
-            4. After timer has finished, get the votes from the players 
+            4. After timer has finished, get the votes from the players
             5. Voted people have a chance to defend themselves
         """
-        self.convoManager.addToSummary(f"Day {str(self.gameState.getDay())}:")
+
+        self.convoManager.addConvo(f"Day {str(self.gameState.getDay())}:")
+        alivePlayers = self.gameState.getAlivePlayers()
+
+        logging.info(self.convoManager.getLastConvo())
+
+        logging.debug("Initiating conversation with players...")
+
+        votes = []
+        all_votes = self.countVotes(votes)
+
+        votedPlayers = votes[:2]
+        if self.checkTie(votes, all_votes, votedPlayers):
+            return
+
+        for player in votedPlayers:
+            if player == None:
+                continue
+            self.convoManager.addConvo(
+                f"{player} makes his/her defense: " + player.makeDefense()
+            )
+
+        secondVotes = self.countSecondVotes(votedPlayers)
+
+        self.countVotesAndKill(secondVotes, votedPlayers)
+
+        self.convoManager.clearConvo()
+
+
+    """
+    Counts the votes from all the players currenttly alive.
+    @param votes: should be an empty list when invoking the function.
+    Then votes will be filled with a sorted list.
+    @returns: dictionary that maps players to their vote count.
+    """
+    def countVotes(self, votes: list[Player]) -> dict[Player, int]:
+        alivePlayers = self.gameState.getAlivePlayers()
+
+        all_votes = {}
+        for player in alivePlayers:
+            votedPlayer = player.castVote(alivePlayers)
+            if votedPlayer in all_votes:
+                all_votes[votedPlayer] += 1
+            else:
+                all_votes[votedPlayer] = 1
+        votes.extend(sorted(all_votes, key=all_votes.get, reverse=True))
+
+        logging.debug(f"All Votes: {all_votes}")
+
+        return all_votes
+
+    """
+     Checks for a tie with the given votes. If there is a tie, return True.
+     If there is a tie for second place, just make the second
+       player None and return False.
+     If there is no tie, return False.
+
+     @param votes: List of players sorted by number of votes
+     @param all_votes: Dictionary mapping players to their vote count
+    """
+
+    def checkTie(
+        self,
+        votes: list[Player],
+        all_votes: dict[Player, int],
+        votedPlayers: list[Player],
+    ) -> bool:
+        if len(votes) >= 3 and all_votes[votes[0]] == all_votes[votes[2]]:
+            logging.info("There's a tie in votes, no one gets voted out")
+            self.convoManager.addConvo("There's a tie in votes, no one gets voted out.")
+            return True
+        elif len(votes) >= 3 and all_votes[votes[1]] == all_votes[votes[2]]:
+            logging.info("Tie for second place, only one player will get voted")
+            self.convoManager.addConvo(
+                "Tie for second place, only one player will get voted"
+            )
+            votedPlayers[1] = None
+
+        logging.info(f"Voted Players: {votedPlayers}")
+
+        return False
+
+    def countSecondVotes(self, votedPlayers: list[Player]) -> None:
+        alivePlayers = self.getGameState().getAlivePlayers()
+
+        secondVotes = [0, 0]
+        for player in alivePlayers:
+            if player in votedPlayers:
+                continue
+            (vote1, vote2) = player.castSecondVote(tuple(votedPlayers))
+            if vote1:
+                secondVotes[0] += 1
+            if vote2:
+                secondVotes[1] += 1
+
+        logging.debug(f"Second Votes: {secondVotes}")
+
+        return secondVotes
+
+    def countVotesAndKill(
+        self, secondVotes: list[int], votedPlayers: list[Player]
+    ) -> None:
+        alivePlayers = self.getGameState().getAlivePlayers()
+
+        currAlivePlayers = len(alivePlayers)
+        # Min in case only one person was voted
+        for i in range(min(2, len(votedPlayers))):
+            if secondVotes[i] > (
+                currAlivePlayers - len(votedPlayers) - secondVotes[i]
+            ) and (votedPlayers[i] != None):
+                self.gameState.killPlayer(votedPlayers[i])
+                self.convoManager.addConvo(
+                    f"{votedPlayers[i]} was voted out by the town.\n"
+                )
+                logging.info(f"{votedPlayers[i]} was voted out by the town.")
+            else:
+                self.convoManager.addConvo(
+                    f"{votedPlayers[i]} was NOT voted out by the town.\n"
+                )
+                logging.info(f"{votedPlayers[i]} was NOT voted out by the town.")
 
     def getMafiaVotes(self) -> Player:
         """
@@ -149,6 +266,33 @@ class GameManager:
         votes = [mafia.pickTarget(alivePlayers) for mafia in self.gameState.getMafias()]
         return max(set(votes), key=votes.count)
 
+    def checkWin(self) -> bool:
+        if self.gameState.checkPlayerWin():
+            logging.info("Game Over! Innocents Win!")
+            return True
+        if self.gameState.checkMafiaWin():
+            logging.info("Game Over! Mafias Win!")
+            return True
+        
+        return False
+        
+    """
+    Keep going until the game is over.
+    """
+    def gameLoop(self) -> None:
+        logging.debug(self.gameState)
+
+        while not self.checkWin():
+            self.nightPhase()
+            logging.debug(self.gameState)
+            if self.checkWin():
+                break
+            self.dayPhase()
+            logging.debug(self.gameState)
+
+        logging.info("Game is finished")
+        logging.debug(f'Game state:\n {self.gameState}')
+
     def __str__(self):
         stringRep = f"GameManager with {self.gameState.getPlayerCount()} players, current day: {self.gameState.getDay()}\n"
         stringRep += f"List of current alive players:\n"
@@ -160,11 +304,7 @@ class GameManager:
 
 gameManager9 = GameManager(9)
 
-funnyFile = open('funnyFile.txt', 'w')
-print(gameManager9.getGameState(), file=funnyFile)
-
-gameManager9.nightPhase()
-print(gameManager9.getGameState(), file=funnyFile)
-
-
+funnyFile = open("funnyFile.txt", "w")
 funnyFile.close()
+
+gameManager9.gameLoop()

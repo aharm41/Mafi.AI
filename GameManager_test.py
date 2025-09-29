@@ -85,3 +85,46 @@ def testDay(gameManager9):
 def testNightPhase(gameManager9):
     gameState = gameManager9.getGameState()
     gameManager9.nightPhase()
+
+def testDayPhase(gameManager9):
+    gameState = gameManager9.getGameState()
+
+    for _ in range(3):
+        currNum = len(gameManager9.getGameState().getAlivePlayers())
+        gameManager9.dayPhase()
+        assert len(gameManager9.getGameState().getAlivePlayers()) <= currNum
+        assert len(gameManager9.getGameState().getAlivePlayers()) >= currNum - 2
+
+def testDeadDoctor(gameManager9, monkeypatch):
+    gameState = gameManager9.getGameState()
+    doctor = gameState.getDoctor()
+    gameState.killPlayer(doctor)
+    assert gameState.isDoctorDead() == True
+
+def testDeadSheriff(gameManager9, monkeypatch):
+    gameState = gameManager9.getGameState()
+    sherrif = gameState.getSheriff()
+    gameState.killPlayer(sherrif)
+    assert gameState.isSheriffDead() == True
+
+def testDayPhaseVoteCount(gameManager9, monkeypatch):
+    player1 = gameManager9.getGameState().getAlivePlayers()[0]
+    def votePlayer1LOL(self, alivePlayers=None):
+        return player1
+    def alwaysSayYes(self, nominatedPlayers=None):
+        return (True, True)
+    
+    monkeypatch.setattr(Player, 'castSecondVote', alwaysSayYes)
+    monkeypatch.setattr(Player, "castVote", votePlayer1LOL)
+
+    gameManager9.dayPhase()
+    gameState9 = gameManager9.getGameState()
+    assert len(gameState9.getDeadPlayers()) == 1
+    assert len(gameState9.getAlivePlayers()) == 8
+    assert gameState9.getDeadPlayers()[0] == player1
+
+def testDayPhaseTie(gameManager9, monkeypatch):
+    def votingMyself(self, alivePlayers=None):
+        return self
+    def alwaysSayYes(self, nominatedPlayers=None):
+        return (True, True)
