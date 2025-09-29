@@ -83,7 +83,12 @@ class GameManager:
         self.convoManager.addConvo(f"Night {str(self.gameState.getDay())}:")
         alivePlayers = self.gameState.getAlivePlayers()
         nominatedPlayer = self.getMafiaVotes()
-        protectedPlayer = self.gameState.getDoctor().getDoctorPick(alivePlayers)
+        protectedPlayer = None
+
+        if not self.gameState.isDoctorDead():
+            protectedPlayer = self.gameState.getDoctor().getDoctorPick(alivePlayers)
+        
+        
         logging.debug(f"Protected Player: {protectedPlayer}")
         logging.debug(f"Nominated Player: {nominatedPlayer}")
 
@@ -122,7 +127,6 @@ class GameManager:
         """
 
         self.convoManager.addConvo(f"Day {str(self.gameState.getDay())}:")
-        alivePlayers = self.gameState.getAlivePlayers()
 
         logging.info(self.convoManager.getLastConvo())
 
@@ -131,23 +135,30 @@ class GameManager:
         votes = []
         all_votes = self.countVotes(votes)
 
-        votedPlayers = votes[:2]
-        if self.checkTie(votes, all_votes, votedPlayers):
-            return
+        votedPlayers = [votes[0]]
+        maxCount = all_votes[votes[0]]
+
+        if len(votes) > 1:
+            for player in votes[1:]:
+                if all_votes[player] == maxCount:
+                    votedPlayers.append(player)
+                else:
+                    break
 
         for player in votedPlayers:
-            if player == None:
-                continue
             self.convoManager.addConvo(
                 f"{player} makes his/her defense: " + player.makeDefense()
             )
 
-        secondVotes = self.countSecondVotes(votedPlayers)
+        nominatedPlayer = self.countSecondVotes(votedPlayers)
 
-        self.countVotesAndKill(secondVotes, votedPlayers)
+        if nominatedPlayer == None:
+            logging.info("No one could be decided! No one has been voted out")
+        else:
+            logging.info(f"The village has spoken! {nominatedPlayer} has been lynched.")
+            self.gameState.killPlayer(nominatedPlayer)
 
         self.convoManager.clearConvo()
-
 
     """
     Counts the votes from all the players currenttly alive.
@@ -155,6 +166,7 @@ class GameManager:
     Then votes will be filled with a sorted list.
     @returns: dictionary that maps players to their vote count.
     """
+
     def countVotes(self, votes: list[Player]) -> dict[Player, int]:
         alivePlayers = self.gameState.getAlivePlayers()
 
@@ -171,75 +183,34 @@ class GameManager:
 
         return all_votes
 
-    """
-     Checks for a tie with the given votes. If there is a tie, return True.
-     If there is a tie for second place, just make the second
-       player None and return False.
-     If there is no tie, return False.
-
-     @param votes: List of players sorted by number of votes
-     @param all_votes: Dictionary mapping players to their vote count
-    """
-
-    def checkTie(
-        self,
-        votes: list[Player],
-        all_votes: dict[Player, int],
-        votedPlayers: list[Player],
-    ) -> bool:
-        if len(votes) >= 3 and all_votes[votes[0]] == all_votes[votes[2]]:
-            logging.info("There's a tie in votes, no one gets voted out")
-            self.convoManager.addConvo("There's a tie in votes, no one gets voted out.")
-            return True
-        elif len(votes) >= 3 and all_votes[votes[1]] == all_votes[votes[2]]:
-            logging.info("Tie for second place, only one player will get voted")
-            self.convoManager.addConvo(
-                "Tie for second place, only one player will get voted"
-            )
-            votedPlayers[1] = None
-
-        logging.info(f"Voted Players: {votedPlayers}")
-
-        return False
-
-    def countSecondVotes(self, votedPlayers: list[Player]) -> None:
+    def countSecondVotes(self, votedPlayers: list[Player]) -> Player:
         alivePlayers = self.getGameState().getAlivePlayers()
 
-        secondVotes = [0, 0]
+        secondVotes = {}
+        for player in votedPlayers:
+            secondVotes[player] = 0
+        secondVotes[None] = 0
+        votedPlayers.append(None)
+
         for player in alivePlayers:
             if player in votedPlayers:
                 continue
-            (vote1, vote2) = player.castSecondVote(tuple(votedPlayers))
-            if vote1:
-                secondVotes[0] += 1
-            if vote2:
-                secondVotes[1] += 1
+
+            votedPlayer = player.castSecondVote(votedPlayers)
+            secondVotes[votedPlayer] += 1
 
         logging.debug(f"Second Votes: {secondVotes}")
 
-        return secondVotes
+        sortedSecondVotes = sorted(secondVotes, key=secondVotes.get, reverse=True)
+        nominatedPlayer = sortedSecondVotes[0]
+        if (
+            len(secondVotes) > 1
+            and secondVotes[nominatedPlayer] == secondVotes[sortedSecondVotes[1]]
+        ):
+            logging.info("Theres been a tie in the votes!")
+            return None
 
-    def countVotesAndKill(
-        self, secondVotes: list[int], votedPlayers: list[Player]
-    ) -> None:
-        alivePlayers = self.getGameState().getAlivePlayers()
-
-        currAlivePlayers = len(alivePlayers)
-        # Min in case only one person was voted
-        for i in range(min(2, len(votedPlayers))):
-            if secondVotes[i] > (
-                currAlivePlayers - len(votedPlayers) - secondVotes[i]
-            ) and (votedPlayers[i] != None):
-                self.gameState.killPlayer(votedPlayers[i])
-                self.convoManager.addConvo(
-                    f"{votedPlayers[i]} was voted out by the town.\n"
-                )
-                logging.info(f"{votedPlayers[i]} was voted out by the town.")
-            else:
-                self.convoManager.addConvo(
-                    f"{votedPlayers[i]} was NOT voted out by the town.\n"
-                )
-                logging.info(f"{votedPlayers[i]} was NOT voted out by the town.")
+        return nominatedPlayer
 
     def getMafiaVotes(self) -> Player:
         """
@@ -273,12 +244,13 @@ class GameManager:
         if self.gameState.checkMafiaWin():
             logging.info("Game Over! Mafias Win!")
             return True
-        
+
         return False
-        
+
     """
     Keep going until the game is over.
     """
+
     def gameLoop(self) -> None:
         logging.debug(self.gameState)
 
@@ -291,7 +263,7 @@ class GameManager:
             logging.debug(self.gameState)
 
         logging.info("Game is finished")
-        logging.debug(f'Game state:\n {self.gameState}')
+        logging.debug(f"Game state:\n {self.gameState}")
 
     def __str__(self):
         stringRep = f"GameManager with {self.gameState.getPlayerCount()} players, current day: {self.gameState.getDay()}\n"
@@ -305,6 +277,11 @@ class GameManager:
 gameManager9 = GameManager(9)
 
 funnyFile = open("funnyFile.txt", "w")
-funnyFile.close()
+
+
 
 gameManager9.gameLoop()
+
+print(gameManager9.convoManager.getConvoSummary(), file=funnyFile)
+
+funnyFile.close()

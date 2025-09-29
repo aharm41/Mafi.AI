@@ -75,7 +75,9 @@ class GameState:
     def isDoctorDead(self) -> bool:
         return self.doctorDead
 
-    def killPlayer(self, player: Player) -> None:
+    def killPlayer(self, player: Player | None) -> None:
+        if player == None:
+            return
         if player not in self.alivePlayers:
             raise PlayerNotFoundError(
                 f"Tried to kill Player {player} but player is not in alive players"

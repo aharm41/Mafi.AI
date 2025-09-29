@@ -111,10 +111,10 @@ def testDayPhaseVoteCount(gameManager9, monkeypatch):
     player1 = gameManager9.getGameState().getAlivePlayers()[0]
     def votePlayer1LOL(self, alivePlayers=None):
         return player1
-    def alwaysSayYes(self, nominatedPlayers=None):
-        return (True, True)
+    def alwaysSayPlayer1(self, votedPlayers):
+        return player1
     
-    monkeypatch.setattr(Player, 'castSecondVote', alwaysSayYes)
+    monkeypatch.setattr(Player, 'castSecondVote', alwaysSayPlayer1)
     monkeypatch.setattr(Player, "castVote", votePlayer1LOL)
 
     gameManager9.dayPhase()
@@ -123,8 +123,31 @@ def testDayPhaseVoteCount(gameManager9, monkeypatch):
     assert len(gameState9.getAlivePlayers()) == 8
     assert gameState9.getDeadPlayers()[0] == player1
 
+def testSecondVoteCancels(gameManager9, monkeypatch):
+    player1 = gameManager9.getGameState().getAlivePlayers()[0]
+    def votePlayer1LOL(self, alivePlayers=None):
+        return player1
+    def alwaysSayNone(self, votedPlayers):
+        return None
+    
+    monkeypatch.setattr(Player, 'castSecondVote', alwaysSayNone)
+    monkeypatch.setattr(Player, "castVote", votePlayer1LOL)
+
+    gameManager9.dayPhase()
+    gameState9 = gameManager9.getGameState()
+    assert len(gameState9.getDeadPlayers()) == 0
+    assert len(gameState9.getAlivePlayers()) == 9
+
 def testDayPhaseTie(gameManager9, monkeypatch):
     def votingMyself(self, alivePlayers=None):
         return self
-    def alwaysSayYes(self, nominatedPlayers=None):
-        return (True, True)
+    def alwaysSayNone(self, votedPlayers):
+        return None
+    
+    monkeypatch.setattr(Player, 'castSecondVote', alwaysSayNone)
+    monkeypatch.setattr(Player, "castVote", votingMyself)
+
+    gameManager9.dayPhase()
+    gameState9 = gameManager9.getGameState()
+    assert len(gameState9.getDeadPlayers()) == 0
+    assert len(gameState9.getAlivePlayers()) == 9

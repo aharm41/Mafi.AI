@@ -54,15 +54,13 @@ class Player:
         print(f"I voted for player {alivePlayers[choice]}")
         return alivePlayers[choice]  # Randomly votes for a player
 
-    def castSecondVote(self, nominatedPlayers: tuple[int, int]) -> tuple[bool, bool]:
+    def castSecondVote(self, votedPlayers: list['Player']) -> 'Player':
         """
-        Based on the previous conversation and after the prosecuted have a chance to defend themselves,
-
-        Args: nominatedPlayers: A tuple containing the two numbers of the two players nominated
-
-        Returns: true or false whether or not we want to eject the player
+        After a group of players have been voted, choose a player from the list as the final
+        vote to vote out, or choose None if you think a mistake has been made
         """
-        return [random.choice([True, False]), random.choice([True, False])]
+
+        return random.choice(votedPlayers)
 
     def makeDefense(self) -> str:
         """
