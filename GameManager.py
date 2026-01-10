@@ -189,6 +189,7 @@ class GameManager:
         all_votes = {}
         for player in alivePlayers:
             votedPlayer = player.castVote(alivePlayers, self.convoManager.getConvoSummary())
+            if votedPlayer == None: continue
             if votedPlayer in all_votes:
                 all_votes[votedPlayer] += 1
             else:
