@@ -1,7 +1,7 @@
+from __future__ import annotations
 import PlayerRoles as Roles
 import logging
 import random
-
 
 class Player:
     """
@@ -28,7 +28,7 @@ class Player:
         self.role = role
         self.privateSumm = ""  # For the sheriff or something
 
-    def makeConvo(self, question: str | None, player: "Player") -> tuple[str, int]:
+    def makeConvo(self, convo: str, alivePlayers: list[Player]) -> tuple[str, "Player"]:
         """
         Answer a question posed to it if given, and then return a tuple with the answer and another Player
         that we want to talk to next
@@ -40,11 +40,11 @@ class Player:
         Returns: tuple[0]: what it wants to say, tuple[1]: who it wants to talk next
         """
         return (
-            "I'm not sure who to vote... how about you?",
+            "I swear it's not me guys!",
             random.randint(1, 8),
         )  # Please Change this.
 
-    def castVote(self, alivePlayers: list["Player"]) -> "Player":
+    def castVote(self, alivePlayers: list[Player], convo: str) -> Player:
         """
         Based on the previous conversation, make a vote.
 
@@ -54,7 +54,7 @@ class Player:
         print(f"I voted for player {alivePlayers[choice]}")
         return alivePlayers[choice]  # Randomly votes for a player
 
-    def castSecondVote(self, votedPlayers: list['Player']) -> 'Player':
+    def castSecondVote(self, votedPlayers: list[Player]) -> Player:
         """
         After a group of players have been voted, choose a player from the list as the final
         vote to vote out, or choose None if you think a mistake has been made
@@ -101,6 +101,9 @@ class Player:
 
     def updatePrivSumm(self, summ: str) -> None:
         self.privateSumm += summ + "\n"
+
+    def getName(self) -> str:
+        return self.name
 
     def __str__(self) -> str:
         return self.name + ", role: " + str(self.role)

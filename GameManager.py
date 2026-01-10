@@ -1,10 +1,13 @@
 from PlayerRoles import PlayerRole
 from Player import Player
+from GPTPlayer import GPTPlayer
 from ConvoManager import ConvoManager
 from GameState import GameState
-import logging
 
+import logging
+import threading
 import random
+from collections import deque
 
 
 class GameManager:
@@ -47,8 +50,16 @@ class GameManager:
         doctor = None
         sheriff = None
 
+        set_innocent = False
+
         # Assign roles to players, keep track of each team
         for i in range(playerCount):
+            if not set_innocent and playerRolesList[i] == PlayerRole.INNOCENT:
+                playerList.append(GPTPlayer('Pirate Pete', i + 1, PlayerRole.INNOCENT))
+                innocentList.append(playerList[i])
+                set_innocent = True
+                continue
+
             playerList.append(Player(f"Player { i + 1 }", i + 1, playerRolesList[i]))
             if playerRolesList[i] == PlayerRole.MAFIA:
                 mafiaList.append(playerList[i])
@@ -88,27 +99,27 @@ class GameManager:
         if not self.gameState.isDoctorDead():
             protectedPlayer = self.gameState.getDoctor().getDoctorPick(alivePlayers)
         
-        
         logging.debug(f"Protected Player: {protectedPlayer}")
         logging.debug(f"Nominated Player: {nominatedPlayer}")
 
         if nominatedPlayer != protectedPlayer:
-            self.gameState.killPlayer(nominatedPlayer)
-            self.convoManager.addConvo(f"{nominatedPlayer} was killed by the Mafia.\n")
+            self.murderPlayer(nominatedPlayer)
         else:
             self.convoManager.addConvo(
-                f"The mafia tried to kill {protectedPlayer}, but the doctor saved him.\n"
+                f"The mafia tried to kill {protectedPlayer.getName()}, but the doctor saved him.\n"
             )
 
         if not self.getGameState().isSheriffDead():
             sheriffTarget = self.gameState.getSheriff().investigatePlayer(alivePlayers)
             if sheriffTarget in self.gameState.getMafias():
                 self.gameState.getSheriff().updatePrivSumm(
-                    f"{sheriffTarget} is a Mafia member.\n"
+                    f"You investigated {sheriffTarget.getName()} on Day {self.gameState.getDay()} and found"
+                    f" that {sheriffTarget.getName()} is a Mafia member.\n"
                 )
             else:
                 self.gameState.getSheriff().updatePrivSumm(
-                    f"{sheriffTarget} is an Innocent member.\n"
+                    f"You investigated {sheriffTarget.getName()} on Day {self.gameState.getDay()} and found"
+                    f" that {sheriffTarget.getName()} is an innocent.\n"
                 )
         self.gameState.clearProtection()
         self.gameState.nextDay()
@@ -128,9 +139,8 @@ class GameManager:
 
         self.convoManager.addConvo(f"Day {str(self.gameState.getDay())}:")
 
-        logging.info(self.convoManager.getLastConvo())
-
         logging.debug("Initiating conversation with players...")
+        self.initConversation()
 
         votes = []
         all_votes = self.countVotes(votes)
@@ -145,18 +155,24 @@ class GameManager:
                 else:
                     break
 
+        votedPlayersConvo = 'These players have been voted by the village to be lynched: '
+        for player in votedPlayers:
+            votedPlayersConvo += f'{player.getName()}, '
+        votedPlayersConvo += 'they make their defense:'
+        self.convoManager.addConvo(votedPlayersConvo)
+
         for player in votedPlayers:
             self.convoManager.addConvo(
-                f"{player} makes his/her defense: " + player.makeDefense()
+                f"{player.getName()} makes his/her defense: " + player.makeDefense()
             )
 
+        self.convoManager.addConvo('Players now cast their second vote')
         nominatedPlayer = self.countSecondVotes(votedPlayers)
 
         if nominatedPlayer == None:
-            logging.info("No one could be decided! No one has been voted out")
+            self.convoManager.addConvo("No one could be decided! No one has been voted out.")
         else:
-            logging.info(f"The village has spoken! {nominatedPlayer} has been lynched.")
-            self.gameState.killPlayer(nominatedPlayer)
+            self.lynchPlayer(nominatedPlayer)
 
         self.convoManager.clearConvo()
 
@@ -172,7 +188,7 @@ class GameManager:
 
         all_votes = {}
         for player in alivePlayers:
-            votedPlayer = player.castVote(alivePlayers)
+            votedPlayer = player.castVote(alivePlayers, self.convoManager.getConvoSummary())
             if votedPlayer in all_votes:
                 all_votes[votedPlayer] += 1
             else:
@@ -250,7 +266,6 @@ class GameManager:
     """
     Keep going until the game is over.
     """
-
     def gameLoop(self) -> None:
         logging.debug(self.gameState)
 
@@ -265,6 +280,35 @@ class GameManager:
         logging.info("Game is finished")
         logging.debug(f"Game state:\n {self.gameState}")
 
+    def initConversation(self) -> None:
+        self.convoManager.addConvo('The villagers discuss who to lynch:')
+
+        talkQueue = deque(self.gameState.getAlivePlayers())
+        timerOver = threading.Event()
+
+        def timerFunc():
+            timerOver.set()
+
+        timer = threading.Timer(15, timerFunc)
+        timer.start()
+
+        while not timerOver.wait(0.05) and len(talkQueue):
+            nextPlayer = talkQueue.popleft()
+            [playerConvo, raisedPlayer] = nextPlayer.makeConvo(self.convoManager.getConvoSummary(), self.gameState.getAlivePlayers())
+            self.convoManager.addConvo(f'{nextPlayer.getName()} says: ' + playerConvo)
+            # if raisedPlayer is not None:
+            #     talkQueue.appendleft(raisedPlayer)
+
+        self.convoManager.addConvo('Voting now begins.')
+
+    def murderPlayer(self, player: Player) -> None:
+        self.convoManager.addConvo(f'{player.getName()} was brutally murdered by the Mafia. The players role was: {player.role.value}')
+        self.gameState.killPlayer(player)
+
+    def lynchPlayer(self, player: Player) -> None:
+        self.convoManager.addConvo(f'{player.getName()} was voted by the village and has been lynched! The players role was: {player.role.value}')
+        self.gameState.killPlayer(player)
+    
     def __str__(self):
         stringRep = f"GameManager with {self.gameState.getPlayerCount()} players, current day: {self.gameState.getDay()}\n"
         stringRep += f"List of current alive players:\n"
@@ -274,7 +318,7 @@ class GameManager:
         return stringRep
 
 
-gameManager9 = GameManager(9)
+gameManager9 = GameManager(8)
 
 funnyFile = open("funnyFile.txt", "w")
 

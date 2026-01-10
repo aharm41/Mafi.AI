@@ -23,6 +23,9 @@ class ConvoManager:
     def getConvoSummary(self) -> str | None:
         return self.convoSummary
 
+    """
+    Just clears the LAST convo, not all convos
+    """
     def clearConvo(self) -> None:
         self.lastConvo = ''
 
