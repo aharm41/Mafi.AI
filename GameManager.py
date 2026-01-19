@@ -12,10 +12,9 @@ from collections import deque
 
 class GameManager:
     """
-    Game Manager acts like that mayor would. They control the game,
+    Game Manager acts like how mayor would. They control the game,
       intitate day and night phases and assigns roles to players.
-    Updates the GameState class if someone is killed. This is kind
-      of like the 'mayor'.
+    Updates the GameState class if someone is killed.
 
     Init function:
 
@@ -50,17 +49,10 @@ class GameManager:
         doctor = None
         sheriff = None
 
-        set_innocent = False
-
         # Assign roles to players, keep track of each team
         for i in range(playerCount):
-            if not set_innocent and playerRolesList[i] == PlayerRole.INNOCENT:
-                playerList.append(GPTPlayer('Pirate Pete', i + 1, PlayerRole.INNOCENT))
-                innocentList.append(playerList[i])
-                set_innocent = True
-                continue
 
-            playerList.append(Player(f"Player { i + 1 }", i + 1, playerRolesList[i]))
+            playerList.append(GPTPlayer(f"Player { i + 1 }", i + 1, playerRolesList[i]))
             if playerRolesList[i] == PlayerRole.MAFIA:
                 mafiaList.append(playerList[i])
             else:
@@ -97,7 +89,7 @@ class GameManager:
         protectedPlayer = None
 
         if not self.gameState.isDoctorDead():
-            protectedPlayer = self.gameState.getDoctor().getDoctorPick(alivePlayers)
+            protectedPlayer = self.gameState.getDoctor().getDoctorPick(alivePlayers, self.convoManager.getConvoSummary())
         
         logging.debug(f"Protected Player: {protectedPlayer}")
         logging.debug(f"Nominated Player: {nominatedPlayer}")
@@ -110,7 +102,7 @@ class GameManager:
             )
 
         if not self.getGameState().isSheriffDead():
-            sheriffTarget = self.gameState.getSheriff().investigatePlayer(alivePlayers)
+            sheriffTarget = self.gameState.getSheriff().investigatePlayer(alivePlayers, self.convoManager.getConvoSummary())
             if sheriffTarget in self.gameState.getMafias():
                 self.gameState.getSheriff().updatePrivSumm(
                     f"You investigated {sheriffTarget.getName()} on Day {self.gameState.getDay()} and found"
@@ -163,7 +155,7 @@ class GameManager:
 
         for player in votedPlayers:
             self.convoManager.addConvo(
-                f"{player.getName()} makes his/her defense: " + player.makeDefense()
+                f"{player.getName()} makes his/her defense: " + player.makeDefense(self.gameState.getAlivePlayers(), self.convoManager.getConvoSummary())
             )
 
         self.convoManager.addConvo('Players now cast their second vote')
@@ -213,8 +205,9 @@ class GameManager:
             if player in votedPlayers:
                 continue
 
-            votedPlayer = player.castSecondVote(votedPlayers)
-            secondVotes[votedPlayer] += 1
+            votedPlayer = player.castSecondVote(votedPlayers, self.convoManager.getConvoSummary())
+            if votedPlayer is not None:
+                secondVotes[votedPlayer] += 1
 
         logging.debug(f"Second Votes: {secondVotes}")
 
@@ -251,7 +244,7 @@ class GameManager:
         """
         alivePlayers = self.gameState.getInnocents()
 
-        votes = [mafia.pickTarget(alivePlayers) for mafia in self.gameState.getMafias()]
+        votes = [mafia.pickTarget(alivePlayers, self.convoManager.getConvoSummary()) for mafia in self.gameState.getMafias()]
         return max(set(votes), key=votes.count)
 
     def checkWin(self) -> bool:
@@ -287,13 +280,13 @@ class GameManager:
         talkQueue = deque(self.gameState.getAlivePlayers())
         timerOver = threading.Event()
 
-        def timerFunc():
-            timerOver.set()
+        # def timerFunc():
+        #     timerOver.set()
 
-        timer = threading.Timer(15, timerFunc)
-        timer.start()
+        # timer = threading.Timer(15, timerFunc)
+        # timer.start()
 
-        while not timerOver.wait(0.05) and len(talkQueue):
+        while len(talkQueue):
             nextPlayer = talkQueue.popleft()
             [playerConvo, raisedPlayer] = nextPlayer.makeConvo(self.convoManager.getConvoSummary(), self.gameState.getAlivePlayers())
             self.convoManager.addConvo(f'{nextPlayer.getName()} says: ' + playerConvo)

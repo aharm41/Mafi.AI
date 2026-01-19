@@ -1,6 +1,7 @@
 __pycache__
 .vscode
 .pytest_cache
-notes.txt
-game.log
 funnyFile.txt
+game.log
+notes.txt
+.venv
