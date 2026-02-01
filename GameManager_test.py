@@ -3,6 +3,7 @@ from PlayerRoles import PlayerRole
 from Player import Player
 from GameState import PlayerNotFoundError
 from GameManager import GameManager
+from InputParams import InputParams
 
 @pytest.fixture
 def gameManager9():
@@ -11,6 +12,10 @@ def gameManager9():
 @pytest.fixture
 def gameManager15():
     return GameManager(15)
+
+@pytest.fixture
+def inputParamsInvalid():
+    return InputParams(5, [PlayerRole.MAFIA, PlayerRole.DOCTOR, PlayerRole.SHERIFF, PlayerRole.INNOCENT])
 
 def test_playerCount(gameManager9):
     assert gameManager9.getGameState().getPlayerCount() == 9
@@ -151,3 +156,7 @@ def testDayPhaseTie(gameManager9, monkeypatch):
     gameState9 = gameManager9.getGameState()
     assert len(gameState9.getDeadPlayers()) == 0
     assert len(gameState9.getAlivePlayers()) == 9
+
+def testInvalidInputParams(inputParamsInvalid):
+    with pytest.raises(ValueError):
+        inputParamsInvalid.validate()

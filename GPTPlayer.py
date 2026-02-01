@@ -1,6 +1,7 @@
 from __future__ import annotations
 import PlayerRoles as Roles
 from Player import Player
+from GPTProfiles import *
 import logging
 import random
 from typing import Optional
@@ -19,7 +20,7 @@ class GPTPlayer(Player):
     convo_addition_message = 'Now its your turn to speak. You may or may not accuse one or multiple players. ' \
     'You can only accuse alive players. Check with your tool for the alive players and pull a player out of that list if you accuse. '
     vote_message = 'Now its your turn to vote. You can only vote alive players. Check with your tool for the alive players and pull a player out of that list. ' \
-    'You dont have to vote someone if you dont want to. '
+    'You dont have to vote someone if you dont want to. Make sure your pick is exactly as the name appears. Say nothing but the name.'
     second_vote_message = """
     Players have been staged for being lynched. You now cast your second vote.
     Check with your tool to see what players are being staged, and pick a player out
@@ -27,19 +28,19 @@ class GPTPlayer(Player):
     """
     making_defense_message = """
     You have been voted to be lynched! Make your defense now. If you want to deflect blame,
-    use your get alive players tool to get the list of currently alive players. Make sure your pick is exactly as the name appears.
+    use your get alive players tool to get the list of currently alive players. Make sure your response is within 50 words.
     """
     picking_target_message = """
     It's time for you to pick a player to kill as Mafia. Use your get alive players tool to get
-    the list of currently alive players, and pick one of them as your target. Make sure your pick is exactly as the name appears.
+    the list of currently alive players, and pick one of them as your target. Make sure your pick is exactly as the name appears. Say nothing but the name.
     """
     investigating_player_message = """
     It's time to investigate a player as Sheriff. Use your get alive players tool to get
-    the list of currently alive players, and pick one of them to investigate. Make sure your pick is exactly as the name appears.
+    the list of currently alive players, and pick one of them to investigate. Make sure your pick is exactly as the name appears. Say nothing but the name.
     """
     doctor_protecting_message = """
     It's time to pick a player to protect as Doctor. Use your get alive players tool to get
-    the list of currently alive players, and pick one of them to protect. Make sure your pick is exactly as the name appears.
+    the list of currently alive players, and pick one of them to protect. Make sure your pick is exactly as the name appears. Say nothing but the name.
     """
 
     alivePlayers_tool = [
@@ -89,14 +90,16 @@ class GPTPlayer(Player):
         name: str,
         number: int = 1,
         role: Roles.PlayerRole = Roles.PlayerRole.INNOCENT,
-        token_usage: int = 0,
+        profile: BaseGPTConfig = BaseGPTConfig()
     ) -> None:
         super().__init__(name, number, role)
 
-        self.developer_message_innocent = f"You are playing a game of Mafia. You have been given the role of Innocent. Your name is {self.name}."
-        self.developer_message_mafia = f"You are playing a game of Mafia. You have been given the role of Mafia! Your name is {self.name}."
-        self.developer_message_doctor = f"You are playing a game of Mafia. You have been given the role of Doctor! Your name is {self.name}."
-        self.developer_message_sheriff = f"You are playing a game of Mafia. You have been given the role of Sheriff! Your name is {self.name}."
+        self.developer_message_innocent = profile.developer_message_innocent
+        self.developer_message_mafia = profile.developer_message_mafia
+        self.developer_message_doctor = profile.developer_message_doctor
+        self.developer_message_sheriff = profile.developer_message_sheriff
+
+        self.token_usage = 0
 
     def makeConvo(self, convo: str, alivePlayers: list[Player]) -> tuple[str, "Player"]:
 
@@ -130,7 +133,7 @@ class GPTPlayer(Player):
             input = input_message,
         )
 
-        self.token_usage += response.token_usage.total_tokens
+        self.token_usage += response.usage.total_tokens
 
         return (response.output_text, None)
     
@@ -170,11 +173,13 @@ class GPTPlayer(Player):
             text_format = PlayerVote,
         )
 
+        self.token_usage += response.usage.total_tokens
+
         for player in alivePlayers:
             if player.getName() == response.output_parsed.your_vote:
                 return player
             
-        logging.debug('Uh oh, GPTPlayer casted a vote on a non-existent or dead player')
+        logging.debug('Uh oh, GPTPlayer casted a vote on a non-existent or dead player: ' + response.output_parsed.your_vote)
 
         return None
     
@@ -214,12 +219,14 @@ class GPTPlayer(Player):
             text_format = PlayerVote,
         )
 
+        self.token_usage += response.usage.total_tokens
+
         for player in votedPlayers:
             if player is not None and player.getName() == response.output_parsed.your_vote:
                 logging.debug('GPTPlayer casted second vote: ' + player.getName())
                 return player
             
-        logging.debug('Uh oh, GPTPlayer casted second vote on an un-staged player')
+        logging.debug('Uh oh, GPTPlayer casted second vote on an un-staged player: ' + response.output_parsed.your_vote)
             
         return None
     
@@ -253,6 +260,8 @@ class GPTPlayer(Player):
             tools = self.alivePlayers_tool,
             input = input_message,
         )
+
+        self.token_usage += response.usage.total_tokens
 
         return response.output_text
     
@@ -293,13 +302,15 @@ class GPTPlayer(Player):
             text_format = MafiaPick,
         )
 
+        self.token_usage += response.usage.total_tokens
+
         for player in innocentPlayers:
             if player is not None and player.getName() == response.output_parsed.your_pick:
                 logging.debug('GPTPlayer picked target: ' + player.getName())
                 return player
             
-        logging.debug('Uh oh, GPTPlayer picked a non-innocent or dead player as target')
-        raise ValueError(f'No player was picked as target by GPTPlayer. They tried: {response.output_parsed.your_pick}')
+        logging.debug('Uh oh, GPTPlayer picked a non-innocent or dead player as target: ' + response.output_parsed.your_pick)
+        raise ValueError('No player was picked as target by GPTPlayer')
     
     def investigatePlayer(self, alivePlayers: list["Player"], convo: str) -> None:
         if self.role != Roles.PlayerRole.SHERIFF:
@@ -338,13 +349,15 @@ class GPTPlayer(Player):
             text_format = SheriffPick,
         )
 
+        self.token_usage += response.usage.total_tokens
+
         for player in alivePlayers:
             if player.getName() == response.output_parsed.your_pick:
                 logging.debug('GPTPlayer investigated: ' + player.getName())
                 return player
             
-        logging.debug('Uh oh, GPTPlayer investigated a non-existent or dead player')
-        raise ValueError(f'No player was investigated by GPTPlayer. They tried: {response.output_parsed.your_pick}')
+        logging.debug('Uh oh, GPTPlayer investigated a non-existent or dead player: ' + response.output_parsed.your_pick)
+        raise ValueError('No player was investigated by GPTPlayer')
 
     def getDoctorPick(self, alivePlayers: list["Player"], convo: str) -> "Player":
         if self.role != Roles.PlayerRole.DOCTOR:
@@ -383,13 +396,15 @@ class GPTPlayer(Player):
             text_format = DoctorPick,
         )
 
+        self.token_usage += response.usage.total_tokens
+
         for player in alivePlayers:
             if player.getName() == response.output_parsed.your_pick:
                 logging.debug('GPTPlayer (Doctor) is protecting: ' + player.getName())
                 return player
             
-        logging.debug('Uh oh, GPTPlayer investigated a non-existent or dead player')
-        raise ValueError(f'No player was investigated by GPTPlayer. They tried: {response.output_parsed.your_pick}')
+        logging.debug('Uh oh, GPTPlayer investigated a non-existent or dead player: ' + response.output_parsed.your_pick)
+        raise ValueError('No player was investigated by GPTPlayer')
     
     def makeInputMessage(self, inputAddition: str, convo: str) -> list[dict]:
         self.checkTokenUsage()
@@ -418,3 +433,6 @@ class GPTPlayer(Player):
         if self.token_usage > 15000:
             logging.warning(f'GPTPlayer {self.getName()} has used {self.token_usage} tokens and is over the limit')
             raise ValueError(f'GPTPlayer {self.getName()} has exceeded the token usage limit.')
+        
+    def getTokenUsage(self) -> int:
+        return self.token_usage

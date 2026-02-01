@@ -3,6 +3,8 @@ from Player import Player
 from GPTPlayer import GPTPlayer
 from ConvoManager import ConvoManager
 from GameState import GameState
+from InputParams import InputParams
+from GPTProfiles import *
 
 import logging
 import threading
@@ -22,7 +24,7 @@ class GameManager:
         playerCount (int): How many players will be playing?
     """
 
-    def __init__(self, playerCount: int) -> None:
+    def __init__(self, inputParams: InputParams) -> None:
         logger = logging.getLogger("__name__")
         logging.basicConfig(filename="game.log", level=logging.DEBUG)
         logger.setLevel(logging.DEBUG)
@@ -33,14 +35,23 @@ class GameManager:
         logger.addHandler(fh)
 
         # How many mafia?
-        mafiaCount = playerCount // 4
-        playerRolesList = [0] * playerCount
+        inputParams.validate()
+
+        mafiaCount = inputParams.mafiaCount
+        sheriffCount = inputParams.sheriffCount
+        doctorCount = inputParams.doctorCount
+
+        playerRolesList = [0] * inputParams.playerCount
         playerRolesList[0:mafiaCount] = [PlayerRole.MAFIA] * mafiaCount
-        playerRolesList[mafiaCount] = PlayerRole.SHERIFF
-        playerRolesList[mafiaCount + 1] = PlayerRole.DOCTOR
-        playerRolesList[mafiaCount + 2 :] = [PlayerRole.INNOCENT] * (
-            playerCount - mafiaCount - 2
-        )
+        playerRolesList[mafiaCount : mafiaCount + sheriffCount] = [
+            PlayerRole.SHERIFF
+        ] * sheriffCount
+        playerRolesList[
+            mafiaCount + sheriffCount : mafiaCount + sheriffCount + doctorCount
+        ] = [PlayerRole.DOCTOR] * doctorCount
+        playerRolesList[mafiaCount + sheriffCount + doctorCount :] = [
+            PlayerRole.INNOCENT
+        ] * (inputParams.playerCount - mafiaCount - sheriffCount - doctorCount)
 
         random.shuffle(playerRolesList)
         playerList = []
@@ -50,9 +61,19 @@ class GameManager:
         sheriff = None
 
         # Assign roles to players, keep track of each team
-        for i in range(playerCount):
+        for i in range(inputParams.playerCount):
+            match inputParams.players[i]:
+                case PlayerType.REFINED_REGINALD:
+                    playerList.append(GPTPlayer("Refined Reginald", i + 1, playerRolesList[i], RefinedReginald()))
+                case PlayerType.SHIFTY_SHELBY:
+                    playerList.append(GPTPlayer("Shifty Shelby", i + 1, playerRolesList[i], ShiftyShelby()))
+                case PlayerType.QUIET_QUINN:
+                    playerList.append(GPTPlayer("Quiet Quinn", i + 1, playerRolesList[i], QuietQuinn()))
+                case PlayerType.PECULIAR_POLLY:
+                    playerList.append(GPTPlayer("Peculiar Polly", i + 1, playerRolesList[i], PeculiarPolly()))
+                case PlayerType.DEFAULT_DERRICK:
+                    playerList.append(GPTPlayer("Default Derrick", i + 1, playerRolesList[i], DefaultDerrick()))
 
-            playerList.append(GPTPlayer(f"Player { i + 1 }", i + 1, playerRolesList[i]))
             if playerRolesList[i] == PlayerRole.MAFIA:
                 mafiaList.append(playerList[i])
             else:
@@ -63,7 +84,7 @@ class GameManager:
             elif playerRolesList[i] == PlayerRole.DOCTOR:
                 doctor = playerList[i]
 
-        print(f"GameManager initialized with {playerCount} players.")
+        logging.info(f"GameManager initialized with {inputParams.playerCount} players.")
 
         self.gameState = GameState(playerList, innocentList, mafiaList, sheriff, doctor)
         self.convoManager = ConvoManager()
@@ -89,8 +110,10 @@ class GameManager:
         protectedPlayer = None
 
         if not self.gameState.isDoctorDead():
-            protectedPlayer = self.gameState.getDoctor().getDoctorPick(alivePlayers, self.convoManager.getConvoSummary())
-        
+            protectedPlayer = self.gameState.getDoctor().getDoctorPick(
+                alivePlayers, self.convoManager.getConvoSummary()
+            )
+
         logging.debug(f"Protected Player: {protectedPlayer}")
         logging.debug(f"Nominated Player: {nominatedPlayer}")
 
@@ -102,7 +125,9 @@ class GameManager:
             )
 
         if not self.getGameState().isSheriffDead():
-            sheriffTarget = self.gameState.getSheriff().investigatePlayer(alivePlayers, self.convoManager.getConvoSummary())
+            sheriffTarget = self.gameState.getSheriff().investigatePlayer(
+                alivePlayers, self.convoManager.getConvoSummary()
+            )
             if sheriffTarget in self.gameState.getMafias():
                 self.gameState.getSheriff().updatePrivSumm(
                     f"You investigated {sheriffTarget.getName()} on Day {self.gameState.getDay()} and found"
@@ -137,6 +162,12 @@ class GameManager:
         votes = []
         all_votes = self.countVotes(votes)
 
+        if len(votes) == 0:
+            self.convoManager.addConvo(
+                "No one could be decided! No one has been voted out."
+            )
+            return
+
         votedPlayers = [votes[0]]
         maxCount = all_votes[votes[0]]
 
@@ -147,22 +178,30 @@ class GameManager:
                 else:
                     break
 
-        votedPlayersConvo = 'These players have been voted by the village to be lynched: '
+        votedPlayersConvo = (
+            "These players have been voted by the village to be lynched: "
+        )
         for player in votedPlayers:
-            votedPlayersConvo += f'{player.getName()}, '
-        votedPlayersConvo += 'they make their defense:'
+            votedPlayersConvo += f"{player.getName()}, "
+        votedPlayersConvo += "they make their defense:"
         self.convoManager.addConvo(votedPlayersConvo)
 
         for player in votedPlayers:
             self.convoManager.addConvo(
-                f"{player.getName()} makes his/her defense: " + player.makeDefense(self.gameState.getAlivePlayers(), self.convoManager.getConvoSummary())
+                f"{player.getName()} makes his/her defense: "
+                + player.makeDefense(
+                    self.gameState.getAlivePlayers(),
+                    self.convoManager.getConvoSummary(),
+                )
             )
 
-        self.convoManager.addConvo('Players now cast their second vote')
+        self.convoManager.addConvo("Players now cast their second vote")
         nominatedPlayer = self.countSecondVotes(votedPlayers)
 
         if nominatedPlayer == None:
-            self.convoManager.addConvo("No one could be decided! No one has been voted out.")
+            self.convoManager.addConvo(
+                "No one could be decided! No one has been voted out."
+            )
         else:
             self.lynchPlayer(nominatedPlayer)
 
@@ -180,8 +219,11 @@ class GameManager:
 
         all_votes = {}
         for player in alivePlayers:
-            votedPlayer = player.castVote(alivePlayers, self.convoManager.getConvoSummary())
-            if votedPlayer == None: continue
+            votedPlayer = player.castVote(
+                alivePlayers, self.convoManager.getConvoSummary()
+            )
+            if votedPlayer == None:
+                continue
             if votedPlayer in all_votes:
                 all_votes[votedPlayer] += 1
             else:
@@ -205,7 +247,9 @@ class GameManager:
             if player in votedPlayers:
                 continue
 
-            votedPlayer = player.castSecondVote(votedPlayers, self.convoManager.getConvoSummary())
+            votedPlayer = player.castSecondVote(
+                votedPlayers, self.convoManager.getConvoSummary()
+            )
             if votedPlayer is not None:
                 secondVotes[votedPlayer] += 1
 
@@ -244,7 +288,10 @@ class GameManager:
         """
         alivePlayers = self.gameState.getInnocents()
 
-        votes = [mafia.pickTarget(alivePlayers, self.convoManager.getConvoSummary()) for mafia in self.gameState.getMafias()]
+        votes = [
+            mafia.pickTarget(alivePlayers, self.convoManager.getConvoSummary())
+            for mafia in self.gameState.getMafias()
+        ]
         return max(set(votes), key=votes.count)
 
     def checkWin(self) -> bool:
@@ -260,6 +307,7 @@ class GameManager:
     """
     Keep going until the game is over.
     """
+
     def gameLoop(self) -> None:
         logging.debug(self.gameState)
 
@@ -271,11 +319,14 @@ class GameManager:
             self.dayPhase()
             logging.debug(self.gameState)
 
+        finalTokens = self.getFinalTokenUsage(self.gameState.getAllPlayers())
+        logging.info(f"Total token usage for this game: {finalTokens} tokens.")
+
         logging.info("Game is finished")
         logging.debug(f"Game state:\n {self.gameState}")
 
     def initConversation(self) -> None:
-        self.convoManager.addConvo('The villagers discuss who to lynch:')
+        self.convoManager.addConvo("The villagers discuss who to lynch:")
 
         talkQueue = deque(self.gameState.getAlivePlayers())
         timerOver = threading.Event()
@@ -288,21 +339,27 @@ class GameManager:
 
         while len(talkQueue):
             nextPlayer = talkQueue.popleft()
-            [playerConvo, raisedPlayer] = nextPlayer.makeConvo(self.convoManager.getConvoSummary(), self.gameState.getAlivePlayers())
-            self.convoManager.addConvo(f'{nextPlayer.getName()} says: ' + playerConvo)
+            [playerConvo, raisedPlayer] = nextPlayer.makeConvo(
+                self.convoManager.getConvoSummary(), self.gameState.getAlivePlayers()
+            )
+            self.convoManager.addConvo(f"{nextPlayer.getName()} says: " + playerConvo)
             # if raisedPlayer is not None:
             #     talkQueue.appendleft(raisedPlayer)
 
-        self.convoManager.addConvo('Voting now begins.')
+        self.convoManager.addConvo("Voting now begins.")
 
     def murderPlayer(self, player: Player) -> None:
-        self.convoManager.addConvo(f'{player.getName()} was brutally murdered by the Mafia. The players role was: {player.role.value}')
+        self.convoManager.addConvo(
+            f"{player.getName()} was brutally murdered by the Mafia. The players role was: {player.role.value}"
+        )
         self.gameState.killPlayer(player)
 
     def lynchPlayer(self, player: Player) -> None:
-        self.convoManager.addConvo(f'{player.getName()} was voted by the village and has been lynched! The players role was: {player.role.value}')
+        self.convoManager.addConvo(
+            f"{player.getName()} was voted by the village and has been lynched! The players role was: {player.role.value}"
+        )
         self.gameState.killPlayer(player)
-    
+
     def __str__(self):
         stringRep = f"GameManager with {self.gameState.getPlayerCount()} players, current day: {self.gameState.getDay()}\n"
         stringRep += f"List of current alive players:\n"
@@ -310,13 +367,23 @@ class GameManager:
             stringRep += f"{player}\n"
 
         return stringRep
+    
+    def getFinalTokenUsage(self, players: list[Player]) -> int:
+        total_tokens = 0
+        for player in players:
+            if isinstance(player, GPTPlayer):
+                total_tokens += player.getTokenUsage()
+                logging.debug('GPTPlayer ' + player.getName() + ' used ' + str(player.getTokenUsage()) + ' tokens.')
+
+        return total_tokens
 
 
-gameManager9 = GameManager(8)
+inputParams = InputParams(5, [PlayerType.DEFAULT_DERRICK, PlayerType.REFINED_REGINALD, PlayerType.SHIFTY_SHELBY, PlayerType.QUIET_QUINN, PlayerType.PECULIAR_POLLY], 1)
+
+
+gameManager9 = GameManager(inputParams)
 
 funnyFile = open("funnyFile.txt", "w")
-
-
 
 gameManager9.gameLoop()
 
