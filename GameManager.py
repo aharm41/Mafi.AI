@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import WebSocket
 from FrontEndConnector import FrontEndConnector
 from PlayerRoles import PlayerRole
@@ -240,10 +241,9 @@ class GameManager:
         alivePlayers = self.gameState.getAlivePlayers()
 
         all_votes = {}
-        for player in alivePlayers:
-            votedPlayer = await player.castVote(
-                alivePlayers, self.convoManager.getConvoSummary()
-            )
+        tasks = [player.castVote(alivePlayers, self.convoManager.getConvoSummary()) for player in alivePlayers]
+        voteList = await asyncio.gather(*tasks)
+        for votedPlayer in voteList:
             if votedPlayer == None:
                 continue
             if votedPlayer in all_votes:
@@ -265,13 +265,16 @@ class GameManager:
         secondVotes[None] = 0
         votedPlayers.append(None)
 
+        playersCastingVotes = []
         for player in alivePlayers:
             if player in votedPlayers:
                 continue
+            playersCastingVotes.append(player)
+        
+        tasks = [player.castSecondVote(votedPlayers, self.convoManager.getConvoSummary()) for player in playersCastingVotes]
+        voteList = await asyncio.gather(*tasks)
 
-            votedPlayer = await player.castSecondVote(
-                votedPlayers, self.convoManager.getConvoSummary()
-            )
+        for votedPlayer in voteList:
             if votedPlayer is not None:
                 secondVotes[votedPlayer] += 1
 

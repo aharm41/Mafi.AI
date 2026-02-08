@@ -5,7 +5,7 @@ from GPTProfiles import *
 import logging
 import random
 from typing import Optional
-from openai import OpenAI
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 import json
 
@@ -15,7 +15,7 @@ Has a maximmum token usage of 15,000 tokens per game: if exceeded, a value error
 Every use of the OpenAI API needs to call the makeInuptMessage function as that checks tokens.
 """
 class GPTPlayer(Player):
-    client = OpenAI()
+    client = AsyncOpenAI()
     
     convo_addition_message = 'Now its your turn to speak. You may or may not accuse one or multiple players. ' \
     'You can only accuse alive players. Check with your tool for the alive players and pull a player out of that list if you accuse. '
@@ -108,7 +108,7 @@ class GPTPlayer(Player):
 
         input_message = self.makeInputMessage(self.convo_addition_message, convo)
 
-        response = self.client.responses.create(
+        response = await self.client.responses.create(
             model = "gpt-5-mini-2025-08-07",
             tools = self.alivePlayers_tool,
             input = input_message,
@@ -128,7 +128,7 @@ class GPTPlayer(Player):
                     })
                 })
 
-        response = self.client.responses.create(
+        response = await self.client.responses.create(
             model = "gpt-5-mini-2025-08-07",
             tools = self.alivePlayers_tool,
             input = input_message,
@@ -146,7 +146,7 @@ class GPTPlayer(Player):
         class PlayerVote(BaseModel):
             your_vote: Optional[str] = None
 
-        response = self.client.responses.parse(
+        response = await self.client.responses.parse(
             model = "gpt-5-mini-2025-08-07",
             tools = self.alivePlayers_tool,
             input = input_message,
@@ -167,7 +167,7 @@ class GPTPlayer(Player):
                     })
                 })
 
-        response = self.client.responses.parse(
+        response = await self.client.responses.parse(
             model = "gpt-5-mini-2025-08-07",
             tools = self.alivePlayers_tool,
             input = input_message,
@@ -192,7 +192,7 @@ class GPTPlayer(Player):
         class PlayerVote(BaseModel):
             your_vote: Optional[str] = None
 
-        response = self.client.responses.parse(
+        response = await self.client.responses.parse(
             model = "gpt-5-mini-2025-08-07",
             tools = self.getStagedPlayers_tool,
             input = input_message,
@@ -213,7 +213,7 @@ class GPTPlayer(Player):
                     })
                 })
 
-        response = self.client.responses.parse(
+        response = await self.client.responses.parse(
             model = "gpt-5-mini-2025-08-07",
             tools = self.getStagedPlayers_tool,
             input = input_message,
@@ -236,7 +236,7 @@ class GPTPlayer(Player):
 
         input_message = self.makeInputMessage(self.making_defense_message, convo)
 
-        response = self.client.responses.create(
+        response = await self.client.responses.create(
             model = "gpt-5-mini-2025-08-07",
             tools = self.alivePlayers_tool,
             input = input_message,
@@ -256,7 +256,7 @@ class GPTPlayer(Player):
                     })
                 })
 
-        response = self.client.responses.create(
+        response = await self.client.responses.create(
             model = "gpt-5-mini-2025-08-07",
             tools = self.alivePlayers_tool,
             input = input_message,
@@ -275,7 +275,7 @@ class GPTPlayer(Player):
         class MafiaPick(BaseModel):
             your_pick: str
 
-        response = self.client.responses.parse(
+        response = await self.client.responses.parse(
             model = "gpt-5-mini-2025-08-07",
             tools = self.getInnocentPlayers_tool,
             input = input_message,
@@ -296,7 +296,7 @@ class GPTPlayer(Player):
                     })
                 })
 
-        response = self.client.responses.parse(
+        response = await self.client.responses.parse(
             model = "gpt-5-mini-2025-08-07",
             tools = self.getInnocentPlayers_tool,
             input = input_message,
@@ -322,7 +322,7 @@ class GPTPlayer(Player):
         class SheriffPick(BaseModel):
             your_pick: str
 
-        response = self.client.responses.parse(
+        response = await self.client.responses.parse(
             model = "gpt-5-mini-2025-08-07",
             tools = self.alivePlayers_tool,
             input = input_message,
@@ -343,7 +343,7 @@ class GPTPlayer(Player):
                     })
                 })
 
-        response = self.client.responses.parse(
+        response = await self.client.responses.parse(
             model = "gpt-5-mini-2025-08-07",
             tools = self.alivePlayers_tool,
             input = input_message,
@@ -369,7 +369,7 @@ class GPTPlayer(Player):
         class DoctorPick(BaseModel):
             your_pick: str
 
-        response = self.client.responses.parse(
+        response = await self.client.responses.parse(
             model = "gpt-5-mini-2025-08-07",
             tools = self.alivePlayers_tool,
             input = input_message,
@@ -390,7 +390,7 @@ class GPTPlayer(Player):
                     })
                 })
 
-        response = self.client.responses.parse(
+        response = await self.client.responses.parse(
             model = "gpt-5-mini-2025-08-07",
             tools = self.alivePlayers_tool,
             input = input_message,
