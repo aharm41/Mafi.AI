@@ -1,6 +1,7 @@
+from FrontEndConnector import FrontEndConnector
 from Player import Player
 from PlayerRoles import PlayerRole
-
+from fastapi import WebSocket
 
 class ConvoManager:
     """
@@ -16,6 +17,10 @@ class ConvoManager:
     def __init__(self):
         self.lastConvo = ''
         self.convoSummary = ''
+        self.frontend = None
+
+    def attach_frontend(self, frontEndConnector: FrontEndConnector):
+        self.frontend = frontEndConnector
 
     def getLastConvo(self) -> str | None:
         return self.lastConvo
@@ -41,9 +46,11 @@ class ConvoManager:
     Summarises the previous convo, and then adds the new convo to the history.
     """
 
-    def addConvo(self, convo: str) -> None:
+    async def addConvo(self, convo: str) -> None:
         self.convoSummary += convo + '\n'
         self.lastConvo += convo + '\n'
+        if self.frontend is not None:
+            await self.frontend.send_message(convo)
 
     def addToSummary(self, convo: str) -> None:
         self.convoSummary += convo + '\n'

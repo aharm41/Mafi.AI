@@ -20,5 +20,6 @@ class InputParams():
             raise ValueError("Player count must be between 4 and 12.")
         if self.mafiaCount >= self.playerCount // 2:
             raise ValueError("Number of Mafia must be less than half of the total players.")
-        if self.playerCount != len(self.players):
+        if self.playerCount != len(self.players) + 1:
+            # Must be add one becaus the WS players is added at the beginning
             raise ValueError("Player count does not match the number of player objects provided.")

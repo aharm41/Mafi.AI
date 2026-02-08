@@ -15,6 +15,7 @@ class GameState:
         mafias: list[Player],
         sheriff: Player,
         doctor: Player,
+        wsPlayers: list[Player] = None,
     ) -> None:
         logger = logging.getLogger("__name__")
         logging.basicConfig(filename="gameState.log", level=logging.INFO)
@@ -36,6 +37,8 @@ class GameState:
         self.deadPlayers: dict[Player, int] = {}  # Trackes date of death
         self.currentDay = 1
         self.protectedPlayer = None  # Might need to change this to a list at some point
+        self.winningRole = None
+        self.wsPlayers = wsPlayers if wsPlayers is not None else []
 
     def getAllPlayers(self) -> list[Player]:
         totalList = self.alivePlayers.copy()
@@ -50,6 +53,9 @@ class GameState:
 
     def getInnocents(self) -> list[Player]:
         return self.innocents.copy()
+    
+    def getWsPlayers(self) -> list[Player]:
+        return self.wsPlayers.copy()
 
     def getMafias(self) -> list[Player]:
         return self.mafias.copy()
@@ -122,6 +128,7 @@ class GameState:
     def checkPlayerWin(self) -> bool:
         if len(self.mafias) == 0:
             logging.info("Zero mafias left, innocents win!")
+            self.setWinningRole('Innocent')
             return True
         return False
 
@@ -130,8 +137,15 @@ class GameState:
             logging.info(
                 "The mafias are at least equal in number to innocents, mafias win!"
             )
+            self.setWinningRole('Mafia')
             return True
         return False
+    
+    def setWinningRole(self, role: str) -> None:
+        self.winningRole = role
+
+    def getWinningRole(self) -> str:
+        return self.winningRole
 
 
 class PlayerNotFoundError(Exception):

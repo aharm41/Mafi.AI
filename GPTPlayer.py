@@ -25,6 +25,7 @@ class GPTPlayer(Player):
     Players have been staged for being lynched. You now cast your second vote.
     Check with your tool to see what players are being staged, and pick a player out
     of there to cast your final vote. Or, vote None if you don't want to vote anyone.
+    Make sure your pick is exactly as the name appears. Say nothing but the name.
     """
     making_defense_message = """
     You have been voted to be lynched! Make your defense now. If you want to deflect blame,
@@ -101,7 +102,7 @@ class GPTPlayer(Player):
 
         self.token_usage = 0
 
-    def makeConvo(self, convo: str, alivePlayers: list[Player]) -> tuple[str, "Player"]:
+    async def makeConvo(self, convo: str, alivePlayers: list[Player]) -> tuple[str, "Player"]:
 
         logging.debug(f'GPT Player {self.getName()} was given this summary: ' + convo)
 
@@ -137,7 +138,7 @@ class GPTPlayer(Player):
 
         return (response.output_text, None)
     
-    def castVote(self, alivePlayers: list[Player], convo: str) -> Player:
+    async def castVote(self, alivePlayers: list[Player], convo: str) -> Player:
         logging.debug(f'GPT Player {self.getName()} was given this summary: ' + convo)
 
         input_message = self.makeInputMessage(self.vote_message, convo)
@@ -183,7 +184,7 @@ class GPTPlayer(Player):
 
         return None
     
-    def castSecondVote(self, votedPlayers: list[Player], convo: str) -> Player:
+    async def castSecondVote(self, votedPlayers: list[Player], convo: str) -> Player:
         logging.debug(f'GPT Player {self.getName()} was given this summary when casting second vote: ' + convo)
 
         input_message = self.makeInputMessage(self.second_vote_message, convo)
@@ -230,7 +231,7 @@ class GPTPlayer(Player):
             
         return None
     
-    def makeDefense(self, alivePlayers: list[Player], convo: str) -> str:
+    async def makeDefense(self, alivePlayers: list[Player], convo: str) -> str:
         logging.debug(f'GPT Player {self.getName()} was given this summary when making defense: ' + convo)
 
         input_message = self.makeInputMessage(self.making_defense_message, convo)
@@ -265,7 +266,7 @@ class GPTPlayer(Player):
 
         return response.output_text
     
-    def pickTarget(self, innocentPlayers: list["Player"], convo: str) -> "Player":
+    async def pickTarget(self, innocentPlayers: list["Player"], convo: str) -> "Player":
         if self.role != Roles.PlayerRole.MAFIA:
             raise ValueError("Only Mafia can pick a target.")
 
@@ -312,7 +313,7 @@ class GPTPlayer(Player):
         logging.debug('Uh oh, GPTPlayer picked a non-innocent or dead player as target: ' + response.output_parsed.your_pick)
         raise ValueError('No player was picked as target by GPTPlayer')
     
-    def investigatePlayer(self, alivePlayers: list["Player"], convo: str) -> None:
+    async def investigatePlayer(self, alivePlayers: list["Player"], convo: str) -> None:
         if self.role != Roles.PlayerRole.SHERIFF:
             raise ValueError("Only Sheriff can investigate players.")
 
@@ -359,7 +360,7 @@ class GPTPlayer(Player):
         logging.debug('Uh oh, GPTPlayer investigated a non-existent or dead player: ' + response.output_parsed.your_pick)
         raise ValueError('No player was investigated by GPTPlayer')
 
-    def getDoctorPick(self, alivePlayers: list["Player"], convo: str) -> "Player":
+    async def getDoctorPick(self, alivePlayers: list["Player"], convo: str) -> "Player":
         if self.role != Roles.PlayerRole.DOCTOR:
             raise ValueError("Only Doctor can pick a target.")
             
