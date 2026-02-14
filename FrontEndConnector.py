@@ -65,7 +65,7 @@ class FrontEndConnector:
             return text
     
     async def ask_for_select(self, prompt: str, options: list[str]) -> str:
-        self.logger.debug(f"ask_for_select called with prompt: {prompt} and options: {options}")
+        self.logger.debug(f"ask_for_select called with prompt: {prompt} and options: {options}")    
         async with self._lock:
             self.logger.debug("Acquired lock for ask_for_select")
             self.current_token = uuid.uuid4().hex

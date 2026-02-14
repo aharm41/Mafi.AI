@@ -23,3 +23,5 @@ class InputParams():
         if self.playerCount != len(self.players) + 1:
             # Must be add one becaus the WS players is added at the beginning
             raise ValueError("Player count does not match the number of player objects provided.")
+        if len(self.players) != len(set(self.players)):
+            raise ValueError("Duplicate player types are not allowed.")
