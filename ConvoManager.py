@@ -2,6 +2,9 @@ from FrontEndConnector import FrontEndConnector
 from Player import Player
 from PlayerRoles import PlayerRole
 from fastapi import WebSocket
+import logging
+
+logger = logging.getLogger('game')
 
 class ConvoManager:
     """

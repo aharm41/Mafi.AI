@@ -12,9 +12,17 @@ import asyncio
 
 from GPTProfiles import PlayerType
 
+logger = logging.getLogger('web_log')
+logger.setLevel(logging.DEBUG)
+
+fh = logging.FileHandler('web.log')
+fh.setLevel(logging.DEBUG)
+
+logger.addHandler(fh)
+
 class InputParamsIn(BaseModel):
     playerCount: int = Field(ge=4, le=12)
-    playerTypes: List[PlayerType]
+    playerTypes: List[str]
     mafiaCount: Optional[int] = None
 
 app = FastAPI()
@@ -23,6 +31,7 @@ app.state.param_sessions: Dict[str, Dict[str, Any]] = {}
 
 @app.get("/setup", response_class=HTMLResponse)
 async def setup_page():
+
     # Serve the HTML below (paste it in as a triple-quoted string)
     return HTMLResponse(SETUP_HTML)
 
@@ -30,14 +39,19 @@ async def setup_page():
 async def list_player_types():
     # Expose enum values to the frontend so the dropdown is always correct
     # Works for typical Enum definitions
-    return {"playerTypes": [e.value for e in PlayerType]}
+    return {"playerTypes": [e.name for e in PlayerType]}
 
 @app.post("/api/setup")
 async def receive_setup(payload: InputParamsIn, request: Request):
-    # Build + validate using your exact rules
+
+    try:
+        player_types = [PlayerType[name] for name in payload.playerTypes]
+    except KeyError as e:
+        raise HTTPException(400, detail=f"Unknown PlayerType: {e}")
+
     params = InputParams(
         playerCount=payload.playerCount,
-        playerTypes=payload.playerTypes,
+        playerTypes=player_types,
         mafiaCount=payload.mafiaCount,
     )
 
@@ -48,10 +62,9 @@ async def receive_setup(payload: InputParamsIn, request: Request):
 
     sid = uuid.uuid4().hex
 
-    # Store as plain JSON-serializable structure (good for passing to other classes)
     app.state.param_sessions[sid] = {
         "playerCount": params.playerCount,
-        "playerTypes": [pt.value for pt in params.players],  # store enum values
+        "playerTypes": [pt.name for pt in player_types],  # store names, JSON-safe
         "mafiaCount": params.mafiaCount,
         "doctorCount": params.doctorCount,
         "sheriffCount": params.sheriffCount,
@@ -68,8 +81,6 @@ async def lobby_ws(ws: WebSocket):
       return
 
     await ws.accept()
-    logger = logging.getLogger(__name__)
-    logger.info(f"WebSocket connection established with session ID: {sid}")
 
     data = app.state.param_sessions.get(sid)
     if not data:
@@ -79,7 +90,7 @@ async def lobby_ws(ws: WebSocket):
     try:
         inputParams = InputParams(
           data['playerCount'],
-          [PlayerType(pt) for pt in data['playerTypes']],
+          [PlayerType[name] for name in data["playerTypes"]],
           data['mafiaCount']
         )
         inputParams.validate()
@@ -230,7 +241,7 @@ SETUP_HTML = r"""
       for (const t of PLAYER_TYPES) {
         const opt = document.createElement("option");
         opt.value = t;
-        opt.textContent = t;
+        opt.textContent = t.replaceAll("_", " ");
         select.appendChild(opt);
       }
 
@@ -255,7 +266,7 @@ SETUP_HTML = r"""
   function collectPayload() {
     const playerCount = clamp(parseInt(playerCountEl.value || "6", 10), 4, 12);
     const mafiaRaw = (mafiaCountEl.value || "").trim();
-    const mafiaCount = mafiaRaw === "" ? null : parseInt(mafiaRaw, 10);
+    const mafiaCount = mafiaRaw === "" ? null : Number(mafiaRaw);
 
     const selects = playersContainer.querySelectorAll("select");
     const playerTypes = [];

@@ -16,7 +16,13 @@ from collections import deque
 
 from WSPlayer import WSPlayer
 
+logger = logging.getLogger('game')
+logger.setLevel(logging.DEBUG)
 
+fh = logging.FileHandler('game.log')
+fh.setLevel(logging.DEBUG)
+
+logger.addHandler(fh)
 class GameManager:
     """
     Game Manager acts like how mayor would. They control the game,
@@ -30,15 +36,7 @@ class GameManager:
     """
 
     def __init__(self, inputParams: InputParams, ws: WebSocket = None) -> None:
-        logger = logging.getLogger("__name__")
-        logging.basicConfig(filename="game.log", level=logging.DEBUG)
-        logger.setLevel(logging.DEBUG)
         frontEndConnector = FrontEndConnector(ws)
-
-        fh = logging.FileHandler("game.log")
-        fh.setLevel(logging.DEBUG)
-
-        logger.addHandler(fh)
 
         # How many mafia?
         inputParams.validate()
@@ -69,17 +67,8 @@ class GameManager:
 
 
         for i in range(inputParams.playerCount - 1):
-            match inputParams.players[i]:
-                case PlayerType.REFINED_REGINALD:
-                    playerList.append(GPTPlayer("Refined Reginald", i + 1, playerRolesList[i], RefinedReginald()))
-                case PlayerType.SHIFTY_SHELBY:
-                    playerList.append(GPTPlayer("Shifty Shelby", i + 1, playerRolesList[i], ShiftyShelby()))
-                case PlayerType.QUIET_QUINN:
-                    playerList.append(GPTPlayer("Quiet Quinn", i + 1, playerRolesList[i], QuietQuinn()))
-                case PlayerType.PECULIAR_POLLY:
-                    playerList.append(GPTPlayer("Peculiar Polly", i + 1, playerRolesList[i], PeculiarPolly()))
-                case PlayerType.DEFAULT_DERRICK:
-                    playerList.append(GPTPlayer("Default Derrick", i + 1, playerRolesList[i], DefaultDerrick()))
+            playerType = inputParams.players[i]
+            playerList.append(GPTPlayer(inputParams.players[i].value.name, i + 1, playerRolesList[i], playerType.value()))
 
             if playerRolesList[i] == PlayerRole.MAFIA:
                 mafiaList.append(playerList[i])
@@ -92,7 +81,7 @@ class GameManager:
                 doctor = playerList[i]
 
         if ws is not None:
-            playerList.insert(0, WSPlayer("Human Player", inputParams.playerCount - 1, playerRolesList[inputParams.playerCount - 1], None))
+            playerList.insert(0, WSPlayer("Human Player", inputParams.playerCount - 1, playerRolesList[inputParams.playerCount - 1]))
             playerList[0].attach_frontend(frontEndConnector)
             if playerRolesList[inputParams.playerCount - 1] == PlayerRole.MAFIA:
                 mafiaList.append(playerList[0])
@@ -104,7 +93,10 @@ class GameManager:
             elif playerRolesList[inputParams.playerCount - 1] == PlayerRole.DOCTOR:
                 doctor = playerList[0]
 
-        logging.info(f"GameManager initialized with {inputParams.playerCount} players.")
+        logger.info(f"GameManager initialized with {inputParams.playerCount} players.")
+        logger.debug(f'Player List: {playerList}')
+        logger.debug(f'Innocent List: {innocentList}')
+        logger.debug(f'Mafia List: {mafiaList}')
 
         self.gameState = GameState(playerList, innocentList, mafiaList, sheriff, doctor, [playerList[0]])
         self.convoManager = ConvoManager()
@@ -135,8 +127,8 @@ class GameManager:
                 alivePlayers, self.convoManager.getConvoSummary()
             )
 
-        logging.debug(f"Protected Player: {protectedPlayer}")
-        logging.debug(f"Nominated Player: {nominatedPlayer}")
+        logger.debug(f"Protected Player: {protectedPlayer}")
+        logger.debug(f"Nominated Player: {nominatedPlayer}")
 
         if not self.getGameState().isSheriffDead():
             sheriffTarget = await self.gameState.getSheriff().investigatePlayer(
@@ -179,7 +171,7 @@ class GameManager:
 
         await self.convoManager.addConvo(f"Day {str(self.gameState.getDay())}:")
 
-        logging.debug("Initiating conversation with players...")
+        logger.debug("Initiating conversation with players...")
         await self.initConversation()
 
         votes = []
@@ -252,7 +244,7 @@ class GameManager:
                 all_votes[votedPlayer] = 1
         votes.extend(sorted(all_votes, key=all_votes.get, reverse=True))
 
-        logging.debug(f"All Votes: {all_votes}")
+        logger.debug(f"All Votes: {all_votes}")
 
         return all_votes
 
@@ -278,7 +270,7 @@ class GameManager:
             if votedPlayer is not None:
                 secondVotes[votedPlayer] += 1
 
-        logging.debug(f"Second Votes: {secondVotes}")
+        logger.debug(f"Second Votes: {secondVotes}")
 
         sortedSecondVotes = sorted(secondVotes, key=secondVotes.get, reverse=True)
         nominatedPlayer = sortedSecondVotes[0]
@@ -286,7 +278,7 @@ class GameManager:
             len(secondVotes) > 1
             and secondVotes[nominatedPlayer] == secondVotes[sortedSecondVotes[1]]
         ):
-            logging.info("Theres been a tie in the votes!")
+            logger.info("Theres been a tie in the votes!")
             return None
 
         return nominatedPlayer
@@ -321,10 +313,10 @@ class GameManager:
 
     def checkWin(self) -> bool:
         if self.gameState.checkPlayerWin():
-            logging.info("Game Over! Innocents Win!")
+            logger.info("Game Over! Innocents Win!")
             return True
         if self.gameState.checkMafiaWin():
-            logging.info("Game Over! Mafias Win!")
+            logger.info("Game Over! Mafias Win!")
             return True
 
         return False
@@ -334,29 +326,38 @@ class GameManager:
     """
 
     async def gameLoop(self) -> None:
-        logging.debug(self.gameState)
+        logger.debug(self.gameState)
         await self.initiateWSPlayers(self.gameState.getWsPlayers())
 
         while not self.checkWin():
             await self.nightPhase()
-            logging.debug(self.gameState)
+            logger.debug(self.gameState)
             if self.checkWin():
                 break
             await self.dayPhase()
-            logging.debug(self.gameState)
+            logger.debug(self.gameState)
 
         finalTokens = self.getFinalTokenUsage(self.gameState.getAllPlayers())
-        logging.info(f"Total token usage for this game: {finalTokens} tokens.")
+        logger.info(f"Total token usage for this game: {finalTokens} tokens.")
 
-        logging.info("Game is finished")
-        logging.debug(f"Game state:\n {self.gameState}")
+        logger.info("Game is finished")
+        logger.debug(f"Game state:\n {self.gameState}")
 
         await self.sendGameOverMessages(self.gameState.getWsPlayers(), self.gameState.getWinningRole())
 
     async def initConversation(self) -> None:
         await self.convoManager.addConvo("The villagers discuss who to lynch:")
 
-        talkQueue = deque(self.gameState.getAlivePlayers())
+        starting_int = random.randint(0, len(self.gameState.getAlivePlayers()) - 1)
+
+        talkQueue = []
+        for i in range(len(self.gameState.getAlivePlayers())):
+            talkQueue.append(self.gameState.getAlivePlayers()[(starting_int + i) % len(self.gameState.getAlivePlayers())])
+
+        for i in range(len(self.gameState.getAlivePlayers())):
+            talkQueue.append(self.gameState.getAlivePlayers()[(starting_int + i) % len(self.gameState.getAlivePlayers())])
+        talkQueue = deque(talkQueue)
+
         timerOver = threading.Event()
 
         # def timerFunc():
@@ -373,6 +374,8 @@ class GameManager:
             await self.convoManager.addConvo(f"{nextPlayer.getName()} says: " + playerConvo)
             # if raisedPlayer is not None:
             #     talkQueue.appendleft(raisedPlayer)
+
+        # Repeat twice, so two people get to talk.
 
         await self.convoManager.addConvo("Voting now begins.")
     async def murderPlayer(self, player: Player) -> None:
@@ -433,7 +436,7 @@ class GameManager:
         for player in players:
             if isinstance(player, GPTPlayer):
                 total_tokens += player.getTokenUsage()
-                logging.debug('GPTPlayer ' + player.getName() + ' used ' + str(player.getTokenUsage()) + ' tokens.')
+                logger.debug('GPTPlayer ' + player.getName() + ' used ' + str(player.getTokenUsage()) + ' tokens.')
 
         return total_tokens
 

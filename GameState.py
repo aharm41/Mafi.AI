@@ -1,6 +1,7 @@
 from Player import Player
 import logging
 
+logger = logging.getLogger('game')
 
 class GameState:
     """
@@ -17,14 +18,6 @@ class GameState:
         doctor: Player,
         wsPlayers: list[Player] = None,
     ) -> None:
-        logger = logging.getLogger("__name__")
-        logging.basicConfig(filename="gameState.log", level=logging.INFO)
-        logger.setLevel(logging.DEBUG)
-
-        fh = logging.FileHandler("game.log")
-        fh.setLevel(logging.DEBUG)
-
-        logger.addHandler(fh)
 
         self.alivePlayers = players
         self.playerCount = len(players)
@@ -53,7 +46,7 @@ class GameState:
 
     def getInnocents(self) -> list[Player]:
         return self.innocents.copy()
-    
+
     def getWsPlayers(self) -> list[Player]:
         return self.wsPlayers.copy()
 
@@ -88,7 +81,7 @@ class GameState:
             raise PlayerNotFoundError(
                 f"Tried to kill Player {player} but player is not in alive players"
             )
-        logging.info(f"Player {player} has been killed on day {self.currentDay}")
+        logger.info(f"Player {player} has been killed on day {self.currentDay}")
         self.alivePlayers.remove(player)
         if player in self.innocents:
             self.innocents.remove(player)
@@ -127,20 +120,20 @@ class GameState:
 
     def checkPlayerWin(self) -> bool:
         if len(self.mafias) == 0:
-            logging.info("Zero mafias left, innocents win!")
-            self.setWinningRole('Innocent')
+            logger.info("Zero mafias left, innocents win!")
+            self.setWinningRole("Innocent")
             return True
         return False
 
     def checkMafiaWin(self) -> bool:
         if len(self.mafias) >= len(self.innocents):
-            logging.info(
+            logger.info(
                 "The mafias are at least equal in number to innocents, mafias win!"
             )
-            self.setWinningRole('Mafia')
+            self.setWinningRole("Mafia")
             return True
         return False
-    
+
     def setWinningRole(self, role: str) -> None:
         self.winningRole = role
 

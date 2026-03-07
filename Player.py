@@ -3,6 +3,8 @@ import PlayerRoles as Roles
 import logging
 import random
 
+logger = logging.getLogger('game')
+
 class Player:
     """
     Player class. Human and AI Players inherit from this.
@@ -15,15 +17,6 @@ class Player:
         role: Roles.PlayerRole = Roles.PlayerRole.INNOCENT,
         profile: str | None = None
     ) -> None:
-        logger = logging.getLogger("__name__")
-        logging.basicConfig(filename='gameState.log', level=logging.INFO)
-        logger.setLevel(logging.DEBUG)
-
-        fh = logging.FileHandler('game.log')
-        fh.setLevel(logging.DEBUG)
-
-        logger.addHandler(fh)
-
         self.number = number
         self.name = name
         self.role = role
@@ -89,7 +82,7 @@ class Player:
             raise ValueError("Only Doctor can pick a target.")
             
         protectedPlayer = random.choice(alivePlayers)
-        logging.debug(f'I, the doctor, {self}, am protecting {protectedPlayer}')
+        logger.debug(f'I, the doctor, {self}, am protecting {protectedPlayer}')
         return protectedPlayer
 
     async def investigatePlayer(self, alivePlayers: list["Player"], convo: str) -> "Player":
@@ -97,7 +90,7 @@ class Player:
             raise ValueError("Only Sheriff can investigate players.")
 
         investigatedPlayer = random.choice(alivePlayers)
-        logging.debug(f'I, the Sherrif, {self}, am about to investigate {investigatedPlayer}')
+        logger.debug(f'I, the Sherrif, {self}, am about to investigate {investigatedPlayer}')
         return investigatedPlayer
 
     async def updatePrivSumm(self, summ: str) -> None:

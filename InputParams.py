@@ -11,7 +11,7 @@ class InputParams():
         self.doctorCount = 1
         self.sheriffCount = 1
 
-        
+
     def validate(self) -> None:
         totalSpecialRoles = self.mafiaCount + self.doctorCount + self.sheriffCount
         if totalSpecialRoles >= self.playerCount:

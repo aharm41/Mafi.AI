@@ -3,6 +3,9 @@ __pycache__
 .pytest_cache
 funnyFile.txt
 game.log
+web.log
+gameState.log
+
 notes.txt
 .venv
 frontend/*

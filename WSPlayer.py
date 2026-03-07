@@ -4,12 +4,13 @@ from PlayerRoles import PlayerRole as Roles
 import logging
 from FrontEndConnector import FrontEndConnector
 
+logger = logging.getLogger('game')
+
 class WSPlayer(Player):
     def __init__(self,
         name: str,
         number: int = 1,
         role: Roles = Roles.INNOCENT,
-        profile: str | None = None
     ):
         super().__init__(name=name, number=number, role=role)
         self.frontEndConnector = None
@@ -89,7 +90,7 @@ class WSPlayer(Player):
         choice = await self.frontEndConnector.ask_for_select('Who do you want to protect?', [p.getName() for p in alivePlayers])
         for player in alivePlayers:
             if player.getName() == choice:
-                logging.debug(f'I, the doctor, {self}, am protecting {player}')
+                logger.debug(f'I, the doctor, {self}, am protecting {player}')
                 return player
 
         raise ValueError("No player with the given name was found.")
@@ -105,7 +106,7 @@ class WSPlayer(Player):
 
         for player in alivePlayers:
             if player.getName() == choice:
-                logging.debug(f'I, the sheriff, {self}, am investigating {player}')
+                logger.debug(f'I, the sheriff, {self}, am investigating {player}')
                 return player
 
         raise ValueError("No player with the given name was found.")

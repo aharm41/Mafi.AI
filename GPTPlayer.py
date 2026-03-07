@@ -3,11 +3,12 @@ import PlayerRoles as Roles
 from Player import Player
 from GPTProfiles import *
 import logging
-import random
 from typing import Optional
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 import json
+
+logger = logging.getLogger('game')
 
 """
 GPTPlayer class. Inherits from Player. Uses GPT-5 to make decisions.
@@ -103,9 +104,6 @@ class GPTPlayer(Player):
         self.token_usage = 0
 
     async def makeConvo(self, convo: str, alivePlayers: list[Player]) -> tuple[str, "Player"]:
-
-        logging.debug(f'GPT Player {self.getName()} was given this summary: ' + convo)
-
         input_message = self.makeInputMessage(self.convo_addition_message, convo)
 
         response = await self.client.responses.create(
@@ -139,7 +137,7 @@ class GPTPlayer(Player):
         return (response.output_text, None)
     
     async def castVote(self, alivePlayers: list[Player], convo: str) -> Player:
-        logging.debug(f'GPT Player {self.getName()} was given this summary: ' + convo)
+        logger.debug(f'GPT Player {self.getName()} was given this summary: ' + convo)
 
         input_message = self.makeInputMessage(self.vote_message, convo)
 
@@ -180,12 +178,15 @@ class GPTPlayer(Player):
             if player.getName() == response.output_parsed.your_vote:
                 return player
             
-        logging.debug('Uh oh, GPTPlayer casted a vote on a non-existent or dead player: ' + response.output_parsed.your_vote)
+        if response.output_parsed.your_vote is None:
+            logger.debug('Uh oh, GPTPlayer voted for None')
+            return None
+        logger.debug('Uh oh, GPTPlayer casted a vote on a non-existent or dead player: ' + response.output_parsed.your_vote)
 
         return None
     
     async def castSecondVote(self, votedPlayers: list[Player], convo: str) -> Player:
-        logging.debug(f'GPT Player {self.getName()} was given this summary when casting second vote: ' + convo)
+        logger.debug(f'GPT Player {self.getName()} was given this summary when casting second vote: ' + convo)
 
         input_message = self.makeInputMessage(self.second_vote_message, convo)
 
@@ -224,15 +225,15 @@ class GPTPlayer(Player):
 
         for player in votedPlayers:
             if player is not None and player.getName() == response.output_parsed.your_vote:
-                logging.debug('GPTPlayer casted second vote: ' + player.getName())
+                logger.debug('GPTPlayer casted second vote: ' + player.getName())
                 return player
             
-        logging.debug('Uh oh, GPTPlayer casted second vote on an un-staged player: ' + response.output_parsed.your_vote)
+        logger.debug('Uh oh, GPTPlayer casted second vote on an un-staged player: ' + response.output_parsed.your_vote)
             
         return None
     
     async def makeDefense(self, alivePlayers: list[Player], convo: str) -> str:
-        logging.debug(f'GPT Player {self.getName()} was given this summary when making defense: ' + convo)
+        logger.debug(f'GPT Player {self.getName()} was given this summary when making defense: ' + convo)
 
         input_message = self.makeInputMessage(self.making_defense_message, convo)
 
@@ -267,6 +268,7 @@ class GPTPlayer(Player):
         return response.output_text
     
     async def pickTarget(self, innocentPlayers: list["Player"], convo: str) -> "Player":
+        logger.debug(f'Innocent Players: {[player.getName() for player in innocentPlayers]}')
         if self.role != Roles.PlayerRole.MAFIA:
             raise ValueError("Only Mafia can pick a target.")
 
@@ -307,10 +309,10 @@ class GPTPlayer(Player):
 
         for player in innocentPlayers:
             if player is not None and player.getName() == response.output_parsed.your_pick:
-                logging.debug('GPTPlayer picked target: ' + player.getName())
+                logger.debug('GPTPlayer picked target: ' + player.getName())
                 return player
             
-        logging.debug('Uh oh, GPTPlayer picked a non-innocent or dead player as target: ' + response.output_parsed.your_pick)
+        logger.debug('Uh oh, GPTPlayer picked a non-innocent or dead player as target: ' + response.output_parsed.your_pick)
         raise ValueError('No player was picked as target by GPTPlayer')
     
     async def investigatePlayer(self, alivePlayers: list["Player"], convo: str) -> None:
@@ -354,10 +356,10 @@ class GPTPlayer(Player):
 
         for player in alivePlayers:
             if player.getName() == response.output_parsed.your_pick:
-                logging.debug('GPTPlayer investigated: ' + player.getName())
+                logger.debug('GPTPlayer investigated: ' + player.getName())
                 return player
             
-        logging.debug('Uh oh, GPTPlayer investigated a non-existent or dead player: ' + response.output_parsed.your_pick)
+        logger.debug('Uh oh, GPTPlayer investigated a non-existent or dead player: ' + response.output_parsed.your_pick)
         raise ValueError('No player was investigated by GPTPlayer')
 
     async def getDoctorPick(self, alivePlayers: list["Player"], convo: str) -> "Player":
@@ -401,10 +403,10 @@ class GPTPlayer(Player):
 
         for player in alivePlayers:
             if player.getName() == response.output_parsed.your_pick:
-                logging.debug('GPTPlayer (Doctor) is protecting: ' + player.getName())
+                logger.debug('GPTPlayer (Doctor) is protecting: ' + player.getName())
                 return player
             
-        logging.debug('Uh oh, GPTPlayer investigated a non-existent or dead player: ' + response.output_parsed.your_pick)
+        logger.debug('Uh oh, GPTPlayer investigated a non-existent or dead player: ' + response.output_parsed.your_pick)
         raise ValueError('No player was investigated by GPTPlayer')
     
     def makeInputMessage(self, inputAddition: str, convo: str) -> list[dict]:
@@ -432,7 +434,7 @@ class GPTPlayer(Player):
     
     def checkTokenUsage(self) -> None:
         if self.token_usage > 15000:
-            logging.warning(f'GPTPlayer {self.getName()} has used {self.token_usage} tokens and is over the limit')
+            logger.warning(f'GPTPlayer {self.getName()} has used {self.token_usage} tokens and is over the limit')
             raise ValueError(f'GPTPlayer {self.getName()} has exceeded the token usage limit.')
         
     def getTokenUsage(self) -> int:
