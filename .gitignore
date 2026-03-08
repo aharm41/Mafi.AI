@@ -7,5 +7,7 @@ web.log
 gameState.log
 
 notes.txt
+setup.txt
+
 .venv
 frontend/*
