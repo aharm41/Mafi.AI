@@ -11,3 +11,6 @@ setup.txt
 
 .venv
 frontend/*
+
+testing.py
+testingAI.py
