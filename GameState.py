@@ -32,6 +32,7 @@ class GameState:
         self.protectedPlayer = None  # Might need to change this to a list at some point
         self.winningRole = None
         self.wsPlayers = wsPlayers if wsPlayers is not None else []
+        self.gptPlayers = [player for player in players if player not in self.wsPlayers] # Just anti-ws Players lowk
 
     def getAllPlayers(self) -> list[Player]:
         totalList = self.alivePlayers.copy()
@@ -49,6 +50,9 @@ class GameState:
 
     def getWsPlayers(self) -> list[Player]:
         return self.wsPlayers.copy()
+    
+    def getGptPlayers(self) -> list[Player]:
+        return self.gptPlayers.copy()
 
     def getMafias(self) -> list[Player]:
         return self.mafias.copy()

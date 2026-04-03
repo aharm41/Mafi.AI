@@ -115,7 +115,7 @@ async def lobby_ws(ws: WebSocket):
             "detail": "An internal server error occurred."
         }))
         return
-    
+
 SETUP_HTML = r"""
 <!doctype html>
 <html>

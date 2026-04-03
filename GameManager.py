@@ -16,13 +16,15 @@ from collections import deque
 
 from WSPlayer import WSPlayer
 
-logger = logging.getLogger('game')
+logger = logging.getLogger("game")
 logger.setLevel(logging.DEBUG)
 
-fh = logging.FileHandler('game.log')
+fh = logging.FileHandler("game.log")
 fh.setLevel(logging.DEBUG)
 
 logger.addHandler(fh)
+
+
 class GameManager:
     """
     Game Manager acts like how mayor would. They control the game,
@@ -38,7 +40,6 @@ class GameManager:
     def __init__(self, inputParams: InputParams, ws: WebSocket = None) -> None:
         frontEndConnector = FrontEndConnector(ws)
 
-        # How many mafia?
         inputParams.validate()
 
         mafiaCount = inputParams.mafiaCount
@@ -64,11 +65,16 @@ class GameManager:
         doctor = None
         sheriff = None
 
-
-
         for i in range(inputParams.playerCount - 1):
             playerType = inputParams.players[i]
-            playerList.append(GPTPlayer(inputParams.players[i].value.name, i + 1, playerRolesList[i], playerType.value()))
+            playerList.append(
+                GPTPlayer(
+                    inputParams.players[i].value.name,
+                    i + 1,
+                    playerRolesList[i],
+                    playerType.value(),
+                )
+            )
 
             if playerRolesList[i] == PlayerRole.MAFIA:
                 mafiaList.append(playerList[i])
@@ -81,7 +87,14 @@ class GameManager:
                 doctor = playerList[i]
 
         if ws is not None:
-            playerList.insert(0, WSPlayer("Human Player", inputParams.playerCount - 1, playerRolesList[inputParams.playerCount - 1]))
+            playerList.insert(
+                0,
+                WSPlayer(
+                    "Human Player",
+                    inputParams.playerCount - 1,
+                    playerRolesList[inputParams.playerCount - 1],
+                ),
+            )
             playerList[0].attach_frontend(frontEndConnector)
             if playerRolesList[inputParams.playerCount - 1] == PlayerRole.MAFIA:
                 mafiaList.append(playerList[0])
@@ -94,11 +107,13 @@ class GameManager:
                 doctor = playerList[0]
 
         logger.info(f"GameManager initialized with {inputParams.playerCount} players.")
-        logger.debug(f'Player List: {playerList}')
-        logger.debug(f'Innocent List: {innocentList}')
-        logger.debug(f'Mafia List: {mafiaList}')
+        logger.debug(f"Player List: {playerList}")
+        logger.debug(f"Innocent List: {innocentList}")
+        logger.debug(f"Mafia List: {mafiaList}")
 
-        self.gameState = GameState(playerList, innocentList, mafiaList, sheriff, doctor, [playerList[0]])
+        self.gameState = GameState(
+            playerList, innocentList, mafiaList, sheriff, doctor, [playerList[0]]
+        )
         self.convoManager = ConvoManager()
         self.convoManager.attach_frontend(frontEndConnector)
 
@@ -119,21 +134,33 @@ class GameManager:
         """
         await self.convoManager.addConvo(f"Night {str(self.gameState.getDay())}:")
         alivePlayers = self.gameState.getAlivePlayers()
-        nominatedPlayer = await self.getMafiaVotes()
+        
+        async def skip():
+            return None
+        
+        nightTasks = [self.getMafiaVotes()]
+        if not self.gameState.isDoctorDead():
+            nightTasks.append(self.gameState.getDoctor().getDoctorPick(alivePlayers, self.convoManager.getConvoSummary()))
+        else:
+            nightTasks.append(skip())
+        if not self.gameState.isSheriffDead():
+            nightTasks.append(self.gameState.getSheriff().investigatePlayer(alivePlayers, self.convoManager.getConvoSummary()))
+        else:
+            nightTasks.append(skip())
+        
         protectedPlayer = None
 
+        results = await asyncio.gather(*nightTasks)
+        nominatedPlayer = results[0]
         if not self.gameState.isDoctorDead():
-            protectedPlayer = await self.gameState.getDoctor().getDoctorPick(
-                alivePlayers, self.convoManager.getConvoSummary()
-            )
+            protectedPlayer = results[1]
+        
 
         logger.debug(f"Protected Player: {protectedPlayer}")
         logger.debug(f"Nominated Player: {nominatedPlayer}")
 
         if not self.getGameState().isSheriffDead():
-            sheriffTarget = await self.gameState.getSheriff().investigatePlayer(
-                alivePlayers, self.convoManager.getConvoSummary()
-            )
+            sheriffTarget = results[2]
             if sheriffTarget in self.gameState.getMafias():
                 await self.gameState.getSheriff().updatePrivSumm(
                     f"You investigated {sheriffTarget.getName()} on Day {self.gameState.getDay()} and found"
@@ -151,7 +178,6 @@ class GameManager:
             await self.convoManager.addConvo(
                 f"The mafia tried to kill {protectedPlayer.getName()}, but the doctor saved him.\n"
             )
-
 
         self.gameState.clearProtection()
         self.gameState.nextDay()
@@ -188,10 +214,16 @@ class GameManager:
 
         if len(votes) > 1:
             for player in votes[1:]:
-                if all_votes[player] == maxCount:
+                if all_votes[player] == maxCount and player is not None:
                     votedPlayers.append(player)
                 else:
                     break
+        
+        if len(votedPlayers) == 1 and votedPlayers[0] is None:
+            await self.convoManager.addConvo(
+                "The village has decided not to lynch anyone today."
+            )
+            return
 
         votedPlayersConvo = (
             "These players have been voted by the village to be lynched: "
@@ -233,12 +265,15 @@ class GameManager:
         alivePlayers = self.gameState.getAlivePlayers()
 
         all_votes = {}
-        tasks = [player.castVote(alivePlayers, self.convoManager.getConvoSummary()) for player in alivePlayers]
+        tasks = [
+            player.castVote(alivePlayers, self.convoManager.getConvoSummary())
+            for player in alivePlayers
+        ]
         voteList = await asyncio.gather(*tasks)
         for votedPlayer in voteList:
             if votedPlayer == None:
-                continue
-            if votedPlayer in all_votes:
+                all_votes[None] = all_votes.get(None, 0) + 1
+            elif votedPlayer in all_votes:
                 all_votes[votedPlayer] += 1
             else:
                 all_votes[votedPlayer] = 1
@@ -255,20 +290,21 @@ class GameManager:
         for player in votedPlayers:
             secondVotes[player] = 0
         secondVotes[None] = 0
-        votedPlayers.append(None)
 
         playersCastingVotes = []
         for player in alivePlayers:
             if player in votedPlayers:
                 continue
             playersCastingVotes.append(player)
-        
-        tasks = [player.castSecondVote(votedPlayers, self.convoManager.getConvoSummary()) for player in playersCastingVotes]
+
+        tasks = [
+            player.castSecondVote(votedPlayers, self.convoManager.getConvoSummary())
+            for player in playersCastingVotes
+        ]
         voteList = await asyncio.gather(*tasks)
 
         for votedPlayer in voteList:
-            if votedPlayer is not None:
-                secondVotes[votedPlayer] += 1
+            secondVotes[votedPlayer] += 1
 
         logger.debug(f"Second Votes: {secondVotes}")
 
@@ -327,7 +363,12 @@ class GameManager:
 
     async def gameLoop(self) -> None:
         logger.debug(self.gameState)
-        await self.initiateWSPlayers(self.gameState.getWsPlayers())
+        logger.debug("Initiating all players...")
+        logger.debug(f"WS Players: {self.gameState.getWsPlayers()}")
+        logger.debug(f"GPT Players: {self.gameState.getGptPlayers()}")
+        await self.initiateAllPlayers(
+            self.gameState.getWsPlayers(), self.gameState.getGptPlayers()
+        )
 
         while not self.checkWin():
             await self.nightPhase()
@@ -343,7 +384,13 @@ class GameManager:
         logger.info("Game is finished")
         logger.debug(f"Game state:\n {self.gameState}")
 
-        await self.sendGameOverMessages(self.gameState.getWsPlayers(), self.gameState.getWinningRole())
+        for player in self.gameState.getGptPlayers():
+            logger.debug(f"{player.getName()} had the following conversation history: ")
+            logger.debug(await player.getConversation())
+
+        await self.sendGameOverMessages(
+            self.gameState.getWsPlayers(), self.gameState.getWinningRole()
+        )
 
     async def initConversation(self) -> None:
         await self.convoManager.addConvo("The villagers discuss who to lynch:")
@@ -352,10 +399,18 @@ class GameManager:
 
         talkQueue = []
         for i in range(len(self.gameState.getAlivePlayers())):
-            talkQueue.append(self.gameState.getAlivePlayers()[(starting_int + i) % len(self.gameState.getAlivePlayers())])
+            talkQueue.append(
+                self.gameState.getAlivePlayers()[
+                    (starting_int + i) % len(self.gameState.getAlivePlayers())
+                ]
+            )
 
         for i in range(len(self.gameState.getAlivePlayers())):
-            talkQueue.append(self.gameState.getAlivePlayers()[(starting_int + i) % len(self.gameState.getAlivePlayers())])
+            talkQueue.append(
+                self.gameState.getAlivePlayers()[
+                    (starting_int + i) % len(self.gameState.getAlivePlayers())
+                ]
+            )
         talkQueue = deque(talkQueue)
 
         timerOver = threading.Event()
@@ -371,13 +426,16 @@ class GameManager:
             [playerConvo, raisedPlayer] = await nextPlayer.makeConvo(
                 self.convoManager.getConvoSummary(), self.gameState.getAlivePlayers()
             )
-            await self.convoManager.addConvo(f"{nextPlayer.getName()} says: " + playerConvo)
+            await self.convoManager.addConvo(
+                f"{nextPlayer.getName()} says: " + playerConvo
+            )
             # if raisedPlayer is not None:
             #     talkQueue.appendleft(raisedPlayer)
 
         # Repeat twice, so two people get to talk.
 
         await self.convoManager.addConvo("Voting now begins.")
+
     async def murderPlayer(self, player: Player) -> None:
         await self.convoManager.addConvo(
             f"{player.getName()} was brutally murdered by the Mafia. The players role was: {player.role.value}"
@@ -398,30 +456,84 @@ class GameManager:
 
     FRONT END PLAYERS MUST HAVE A FONRT END CONNECTOR ATTACHED BEFORE CALLING THIS FUNCTION
     """
+
     async def initiateWSPlayers(self, frontEndPlayers: list[WSPlayer]) -> None:
         for player in frontEndPlayers:
             if player.frontEndConnector is None:
-                raise ValueError('No Web socket is attached yet to the Player class')
+                raise ValueError("No Web socket is attached yet to the Player class")
 
-            await player.updatePrivSumm(f'Your role is: {player.role.value}\n')
+            await player.updatePrivSumm(f"Your role is: {player.role.value}\n")
 
-    async def sendGameOverMessages(self, frontEndPlayers: list[WSPlayer], winningRole: str) -> None:
+            if player.role == PlayerRole.MAFIA:
+                mafia_names = [
+                    mafia.getName()
+                    for mafia in self.gameState.getMafias()
+                    if mafia != player
+                ]
+                if mafia_names:
+                    await player.updatePrivSumm(
+                        f'Your fellow mafia members are: {", ".join(mafia_names)}\n'
+                    )
+                else:
+                    await player.updatePrivSumm(
+                        "You are the only Mafia member in this game.\n"
+                    )
+
+    async def initiateGPTPlayers(self, gptPlayers: list[GPTPlayer]) -> None:
+        tasks1 = [
+            player.init([p.getName() for p in self.gameState.getAllPlayers()])
+            for player in gptPlayers
+            if player.getRole() != PlayerRole.MAFIA
+        ]
+        tasks2 = [
+            player.init(
+                [p.getName() for p in self.gameState.getAllPlayers()],
+                [p.getName() for p in self.gameState.getMafias() if p != player],
+            )
+            for player in gptPlayers
+            if player.getRole() == PlayerRole.MAFIA
+        ]
+        
+        tasks = tasks1 + tasks2
+
+        await asyncio.gather(*tasks)
+
+    async def initiateAllPlayers(
+        self, frontEndPlayers: list[WSPlayer], gptPlayers: list[GPTPlayer]
+    ) -> None:
+        tasks = [
+            self.initiateWSPlayers(frontEndPlayers),
+            self.initiateGPTPlayers(gptPlayers),
+        ]
+        await asyncio.gather(*tasks)
+
+    async def sendGameOverMessages(
+        self, frontEndPlayers: list[WSPlayer], winningRole: str
+    ) -> None:
         for player in frontEndPlayers:
             if player.frontEndConnector is None:
-                raise ValueError('No Web socket is attached yet to the Player class')
+                raise ValueError("No Web socket is attached yet to the Player class")
 
             if winningRole == PlayerRole.MAFIA.value:
                 for players in frontEndPlayers:
                     if players.role == PlayerRole.MAFIA:
-                        await players.updatePrivSumm('Game Over! The Mafia have won! Congratulations, you are a winner!\n')
+                        await players.updatePrivSumm(
+                            "Game Over! The Mafia have won! Congratulations, you are a winner!\n"
+                        )
                     else:
-                        await players.updatePrivSumm('Game Over! The Mafia have won! Better luck next time, you are a loser!\n')
+                        await players.updatePrivSumm(
+                            "Game Over! The Mafia have won! Better luck next time, you are a loser!\n"
+                        )
             else:
                 for players in frontEndPlayers:
                     if players.role == PlayerRole.MAFIA:
-                        await players.updatePrivSumm('Game Over! The Innocents have won! Better luck next time, you are a loser!\n')
+                        await players.updatePrivSumm(
+                            "Game Over! The Innocents have won! Better luck next time, you are a loser!\n"
+                        )
                     else:
-                        await players.updatePrivSumm('Game Over! The Innocents have won! Congratulations, you are a winner!\n')
+                        await players.updatePrivSumm(
+                            "Game Over! The Innocents have won! Congratulations, you are a winner!\n"
+                        )
 
     def __str__(self):
         stringRep = f"GameManager with {self.gameState.getPlayerCount()} players, current day: {self.gameState.getDay()}\n"
@@ -430,15 +542,22 @@ class GameManager:
             stringRep += f"{player}\n"
 
         return stringRep
-    
+
     def getFinalTokenUsage(self, players: list[Player]) -> int:
         total_tokens = 0
         for player in players:
             if isinstance(player, GPTPlayer):
                 total_tokens += player.getTokenUsage()
-                logger.debug('GPTPlayer ' + player.getName() + ' used ' + str(player.getTokenUsage()) + ' tokens.')
+                logger.debug(
+                    "GPTPlayer "
+                    + player.getName()
+                    + " used "
+                    + str(player.getTokenUsage())
+                    + " tokens."
+                )
 
         return total_tokens
+
 
 # if __name__ == "__main__":
 #     inputParams = InputParams(
@@ -461,7 +580,7 @@ class GameManager:
 #         nonlocal gameManager9
 #         await gameManager9.gameLoop()
 
-    
+
 #     await gameManager9.gameLoop()
 
 #     print(gameManager9.convoManager.getConvoSummary(), file=funnyFile)

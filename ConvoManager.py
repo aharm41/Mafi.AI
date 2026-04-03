@@ -21,6 +21,8 @@ class ConvoManager:
         self.lastConvo = ''
         self.convoSummary = ''
         self.frontend = None
+        
+        self.convoState = []
 
     def attach_frontend(self, frontEndConnector: FrontEndConnector):
         self.frontend = frontEndConnector
@@ -28,8 +30,8 @@ class ConvoManager:
     def getLastConvo(self) -> str | None:
         return self.lastConvo
 
-    def getConvoSummary(self) -> str | None:
-        return self.convoSummary
+    def getConvoSummary(self) -> list[str] | None:
+        return self.convoState
 
     """
     Just clears the LAST convo, not all convos
@@ -54,6 +56,8 @@ class ConvoManager:
         self.lastConvo += convo + '\n'
         if self.frontend is not None:
             await self.frontend.send_message(convo)
+            
+        self.convoState.append(convo)
 
     def addToSummary(self, convo: str) -> None:
         self.convoSummary += convo + '\n'

@@ -1,12 +1,34 @@
+import asyncio
+
 import pytest
 from PlayerRoles import PlayerRole
 from Player import Player
 from GameState import PlayerNotFoundError
 from GameManager import GameManager
 from InputParams import InputParams
+from GPTProfiles import PlayerType
+from unittest.mock import AsyncMock, patch, Mock
+
+class DummyWS:
+    async def send_text(self, message):
+        pass
+
+@pytest.fixture
+def gameManager5():
+    dummy1 = AsyncMock()
+    dummy1.name='Player 1'
+    dummy2 = AsyncMock()
+    dummy2.name='Player 2'
+    dummy3 = AsyncMock()
+    dummy3.name='Player 3'
+    dummy4 = AsyncMock()
+    dummy4.name = 'Player 4'
+    inputParams = InputParams(5, [dummy1, dummy2, dummy3, dummy4])
+    return GameManager(inputParams=inputParams, ws=AsyncMock())
 
 @pytest.fixture
 def gameManager9():
+    # inputParams = InputParams(9, [])
     return GameManager(9)
 
 @pytest.fixture
@@ -16,6 +38,7 @@ def gameManager15():
 @pytest.fixture
 def inputParamsInvalid():
     return InputParams(5, [PlayerRole.MAFIA, PlayerRole.DOCTOR, PlayerRole.SHERIFF, PlayerRole.INNOCENT])
+
 
 def test_playerCount(gameManager9):
     assert gameManager9.getGameState().getPlayerCount() == 9
@@ -143,19 +166,20 @@ def testSecondVoteCancels(gameManager9, monkeypatch):
     assert len(gameState9.getDeadPlayers()) == 0
     assert len(gameState9.getAlivePlayers()) == 9
 
-def testDayPhaseTie(gameManager9, monkeypatch):
-    def votingMyself(self, alivePlayers=None):
-        return self
-    def alwaysSayNone(self, votedPlayers):
+@pytest.mark.asyncio
+async def testDayPhaseTie(gameManager5, monkeypatch):
+    def votingMyself(self, alivePlayers=None, convo=['AaaaaA', 'AaaaaA']):
+        return alivePlayers[0]
+    def alwaysSayNone(self, votedPlayers=None, convo=['AaaaaA', 'AaaaaA']):
         return None
     
     monkeypatch.setattr(Player, 'castSecondVote', alwaysSayNone)
-    monkeypatch.setattr(Player, "castVote", votingMyself)
+    monkeypatch.setattr(Player, 'castVote', votingMyself)
 
-    gameManager9.dayPhase()
-    gameState9 = gameManager9.getGameState()
-    assert len(gameState9.getDeadPlayers()) == 0
-    assert len(gameState9.getAlivePlayers()) == 9
+    await gameManager5.dayPhase()
+    gameState5 = gameManager5.getGameState()
+    assert len(gameState5.getDeadPlayers()) == 0
+    assert len(gameState5.getAlivePlayers()) == 5
 
 def testInvalidInputParams(inputParamsInvalid):
     with pytest.raises(ValueError):

@@ -3,6 +3,7 @@ import PlayerRoles as Roles
 from Player import Player
 from GPTProfiles import *
 import logging
+from enum import Enum
 from typing import Optional
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -10,82 +11,34 @@ import json
 
 logger = logging.getLogger('game')
 
+TOKEN_MAX = 100000
+
 """
 GPTPlayer class. Inherits from Player. Uses GPT-5 to make decisions.
 Has a maximmum token usage of 15,000 tokens per game: if exceeded, a value error is raised.
 Every use of the OpenAI API needs to call the makeInuptMessage function as that checks tokens.
 """
 class GPTPlayer(Player):
-    client = AsyncOpenAI()
+    convoIndex = 0
+    convoID = 0
     
-    convo_addition_message = 'Now its your turn to speak. You may or may not accuse one or multiple players. ' \
-    'You can only accuse alive players. Check with your tool for the alive players and pull a player out of that list if you accuse. '
-    vote_message = 'Now its your turn to vote. You can only vote alive players. Check with your tool for the alive players and pull a player out of that list. ' \
-    'You dont have to vote someone if you dont want to. Make sure your pick is exactly as the name appears. Say nothing but the name.'
+    convo_addition_message = 'What do you say to the rest of the players?'
+    vote_message = 'Now cast your vote (you may skip if you\'d like).'
     second_vote_message = """
-    Players have been staged for being lynched. You now cast your second vote.
-    Check with your tool to see what players are being staged, and pick a player out
-    of there to cast your final vote. Or, vote None if you don't want to vote anyone.
-    Make sure your pick is exactly as the name appears. Say nothing but the name.
+    You now cast your second and final vote for this round. (you may skip if you\'d like).
     """
     making_defense_message = """
-    You have been voted to be lynched! Make your defense now. If you want to deflect blame,
-    use your get alive players tool to get the list of currently alive players. Make sure your response is within 50 words.
+    You have been voted to be lynched! Make your defense now. Try to deflect blame!
     """
     picking_target_message = """
-    It's time for you to pick a player to kill as Mafia. Use your get alive players tool to get
-    the list of currently alive players, and pick one of them as your target. Make sure your pick is exactly as the name appears. Say nothing but the name.
+    Pick a player to target for the night as Mafia.
     """
     investigating_player_message = """
-    It's time to investigate a player as Sheriff. Use your get alive players tool to get
-    the list of currently alive players, and pick one of them to investigate. Make sure your pick is exactly as the name appears. Say nothing but the name.
+    As a Sheriff, pick a player to investigate and find their role.
     """
     doctor_protecting_message = """
-    It's time to pick a player to protect as Doctor. Use your get alive players tool to get
-    the list of currently alive players, and pick one of them to protect. Make sure your pick is exactly as the name appears. Say nothing but the name.
+    As a doctor, choose a player to be protected from the Mafia's attack tonight.
     """
-
-    alivePlayers_tool = [
-        {
-            "type": "function",
-            "name": "get_alive_players",
-            "description": "Get the names of the currently alive players in the game",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "additionalProperties": False
-            },
-            "strict": True,
-        },
-    ]
-
-    getStagedPlayers_tool = [
-        {
-            "type": "function",
-            "name": "get_staged_players",
-            "description": "Get the names of the currently staged players for voting",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "additionalProperties": False
-            },
-            "strict": True,
-        }
-    ]
-
-    getInnocentPlayers_tool = [
-        {
-            "type": "function",
-            "name": "get_innocent_players",
-            "description": "Get the names of the alive and innocent players for picking a target",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "additionalProperties": False
-            },
-            "strict": True,
-        }
-    ]
 
     def __init__(
         self,
@@ -95,40 +48,48 @@ class GPTPlayer(Player):
         profile: BaseGPTConfig = BaseGPTConfig()
     ) -> None:
         super().__init__(name, number, role)
+        self.client = AsyncOpenAI()
 
-        self.developer_message_innocent = profile.developer_message_innocent
-        self.developer_message_mafia = profile.developer_message_mafia
-        self.developer_message_doctor = profile.developer_message_doctor
-        self.developer_message_sheriff = profile.developer_message_sheriff
+        match role:
+            case Roles.PlayerRole.INNOCENT:
+                self.sys_message = profile.developer_message_innocent
+            case Roles.PlayerRole.MAFIA:
+                self.sys_message = profile.developer_message_mafia
+            case Roles.PlayerRole.DOCTOR:
+                self.sys_message = profile.developer_message_doctor
+            case Roles.PlayerRole.SHERIFF:
+                self.sys_message = profile.developer_message_sheriff
 
         self.token_usage = 0
+        
+    
+    async def init(self, players: list[str], other_mafias: list[str] = None) -> None:
+        if self.convoID != 0:
+            raise ValueError('Conversation already exists for this player.')
+        
+        system_message = self.sys_message + ' \n ' + 'The players this game are: ' + ', '.join(players)
+        if other_mafias:
+            system_message += '\n' + 'Your other mafia players are: ' + ', '.join(other_mafias)
+            system_message += '\n' + 'Try to co-ordinate with them sneakily without revealing either of your identities as Mafia.'
 
-    async def makeConvo(self, convo: str, alivePlayers: list[Player]) -> tuple[str, "Player"]:
-        input_message = self.makeInputMessage(self.convo_addition_message, convo)
-
-        response = await self.client.responses.create(
-            model = "gpt-5-mini-2025-08-07",
-            tools = self.alivePlayers_tool,
-            input = input_message,
+        
+        conversation = await self.client.conversations.create(
+            items=[
+                {'role': 'system', 'content': system_message},
+                {'role': 'developer', 'content': 'Keep responses within 50 words.'}
+            ]
         )
-
-        input_message += response.output
-
-        for item in response.output:
-            if item.type == "function_call" and item.name == "get_alive_players":
-                alive_players = [player.getName() for player in alivePlayers]
-
-                input_message.append({
-                    "type": "function_call_output",
-                    "call_id": item.call_id,
-                    "output": json.dumps({
-                        "alive_players": alive_players
-                    })
-                })
+        
+        self.convoID = conversation.id
+        
+        
+    async def makeConvo(self, convo: list[str], alivePlayers: list[Player]) -> tuple[str, "Player"]:
+        input_addition = self.convo_addition_message + '\n' + 'The alive players are: ' + ', '.join([player.getName() for player in alivePlayers]) + '\n'
+        input_message = self.makeInputMessage(input_addition, convo)
 
         response = await self.client.responses.create(
+            conversation = self.convoID,
             model = "gpt-5-mini-2025-08-07",
-            tools = self.alivePlayers_tool,
             input = input_message,
         )
 
@@ -136,130 +97,77 @@ class GPTPlayer(Player):
 
         return (response.output_text, None)
     
-    async def castVote(self, alivePlayers: list[Player], convo: str) -> Player:
-        logger.debug(f'GPT Player {self.getName()} was given this summary: ' + convo)
+    async def castVote(self, alivePlayers: list[Player], convo: list[str]) -> Player:
+        logger.debug(f'GPT Player {self.getName()} was given this summary: ' + '\n'.join(convo))
 
         input_message = self.makeInputMessage(self.vote_message, convo)
+        
+        player_list = [player.getName() for player in alivePlayers]
+        players = Enum('players', player_list)
 
         class PlayerVote(BaseModel):
-            your_vote: Optional[str] = None
+            your_vote: Optional[players] = None
 
         response = await self.client.responses.parse(
+            conversation=self.convoID,
             model = "gpt-5-mini-2025-08-07",
-            tools = self.alivePlayers_tool,
-            input = input_message,
-            text_format = PlayerVote,
-        )
-
-        input_message += response.output
-
-        for item in response.output:
-            if item.type == "function_call" and item.name == "get_alive_players":
-                alive_players = [player.getName() for player in alivePlayers]
-
-                input_message.append({
-                    "type": "function_call_output",
-                    "call_id": item.call_id,
-                    "output": json.dumps({
-                        "alive_players": alive_players
-                    })
-                })
-
-        response = await self.client.responses.parse(
-            model = "gpt-5-mini-2025-08-07",
-            tools = self.alivePlayers_tool,
             input = input_message,
             text_format = PlayerVote,
         )
 
         self.token_usage += response.usage.total_tokens
+        
+        if response.output_parsed.your_vote is None:
+            logger.debug('GPTPlayer voted for None')
+            return None
 
         for player in alivePlayers:
-            if player.getName() == response.output_parsed.your_vote:
+            if player.getName() == response.output_parsed.your_vote.name:
                 return player
             
-        if response.output_parsed.your_vote is None:
-            logger.debug('Uh oh, GPTPlayer voted for None')
-            return None
-        logger.debug('Uh oh, GPTPlayer casted a vote on a non-existent or dead player: ' + response.output_parsed.your_vote)
+        logger.debug('Uh oh, GPTPlayer casted a vote on a non-existent or dead player: ' + response.output_parsed.your_vote.name)
+        raise ValueError("No player with the given name was found.")
 
-        return None
     
-    async def castSecondVote(self, votedPlayers: list[Player], convo: str) -> Player:
-        logger.debug(f'GPT Player {self.getName()} was given this summary when casting second vote: ' + convo)
+    async def castSecondVote(self, votedPlayers: list[Player], convo: list[str]) -> Player:
+        logger.debug(f'GPT Player {self.getName()} was given this summary when casting second vote: ' + '\n'.join(convo))
 
         input_message = self.makeInputMessage(self.second_vote_message, convo)
 
+        player_list = [player.getName() for player in votedPlayers]
+        players = Enum('players', player_list)
+
         class PlayerVote(BaseModel):
-            your_vote: Optional[str] = None
+            your_vote: Optional[players] = None
 
         response = await self.client.responses.parse(
+            conversation = self.convoID,
             model = "gpt-5-mini-2025-08-07",
-            tools = self.getStagedPlayers_tool,
-            input = input_message,
-            text_format = PlayerVote,
-        )
-
-        input_message += response.output
-
-        for item in response.output:
-            if item.type == "function_call" and item.name == "get_staged_players":
-                staged_players = [player.getName() if player is not None else None for player in votedPlayers]
-
-                input_message.append({
-                    "type": "function_call_output",
-                    "call_id": item.call_id,
-                    "output": json.dumps({
-                        "staged_players": staged_players
-                    })
-                })
-
-        response = await self.client.responses.parse(
-            model = "gpt-5-mini-2025-08-07",
-            tools = self.getStagedPlayers_tool,
             input = input_message,
             text_format = PlayerVote,
         )
 
         self.token_usage += response.usage.total_tokens
+        if response.output_parsed.your_vote is None:
+            return None
 
         for player in votedPlayers:
-            if player is not None and player.getName() == response.output_parsed.your_vote:
+            if player is not None and player.getName() == response.output_parsed.your_vote.name:
                 logger.debug('GPTPlayer casted second vote: ' + player.getName())
                 return player
             
-        logger.debug('Uh oh, GPTPlayer casted second vote on an un-staged player: ' + response.output_parsed.your_vote)
-            
-        return None
+        raise ValueError("No player with the given name was found.")
     
-    async def makeDefense(self, alivePlayers: list[Player], convo: str) -> str:
-        logger.debug(f'GPT Player {self.getName()} was given this summary when making defense: ' + convo)
+    
+    async def makeDefense(self, alivePlayers: list[Player], convo: list[str]) -> str:
+        logger.debug(f'GPT Player {self.getName()} was given this summary when making defense: ' + '\n '.join(convo))
 
-        input_message = self.makeInputMessage(self.making_defense_message, convo)
-
-        response = await self.client.responses.create(
-            model = "gpt-5-mini-2025-08-07",
-            tools = self.alivePlayers_tool,
-            input = input_message,
-        )
-
-        input_message += response.output
-
-        for item in response.output:
-            if item.type == "function_call" and item.name == "get_alive_players":
-                alive_players = [player.getName() for player in alivePlayers]
-
-                input_message.append({
-                    "type": "function_call_output",
-                    "call_id": item.call_id,
-                    "output": json.dumps({
-                        "alive_players": alive_players
-                    })
-                })
+        input_addition = self.making_defense_message + '\n' + 'The alive players are: ' + ', '.join([player.getName() for player in alivePlayers]) + '\n'
+        input_message = self.makeInputMessage(input_addition, convo)
 
         response = await self.client.responses.create(
+            conversation = self.convoID,
             model = "gpt-5-mini-2025-08-07",
-            tools = self.alivePlayers_tool,
             input = input_message,
         )
 
@@ -267,40 +175,23 @@ class GPTPlayer(Player):
 
         return response.output_text
     
+    
     async def pickTarget(self, innocentPlayers: list["Player"], convo: str) -> "Player":
         logger.debug(f'Innocent Players: {[player.getName() for player in innocentPlayers]}')
         if self.role != Roles.PlayerRole.MAFIA:
             raise ValueError("Only Mafia can pick a target.")
 
+        player_list = [player.getName() for player in innocentPlayers]
+        players = Enum('players', player_list)
+
         input_message = self.makeInputMessage(self.picking_target_message, convo)
 
         class MafiaPick(BaseModel):
-            your_pick: str
+            your_pick: players
 
         response = await self.client.responses.parse(
+            conversation = self.convoID,
             model = "gpt-5-mini-2025-08-07",
-            tools = self.getInnocentPlayers_tool,
-            input = input_message,
-            text_format = MafiaPick,
-        )
-
-        input_message += response.output
-
-        for item in response.output:
-            if item.type == "function_call" and item.name == "get_innocent_players":
-                innocent_players = [player.getName() for player in innocentPlayers]
-
-                input_message.append({
-                    "type": "function_call_output",
-                    "call_id": item.call_id,
-                    "output": json.dumps({
-                        "innocent_players": innocent_players
-                    })
-                })
-
-        response = await self.client.responses.parse(
-            model = "gpt-5-mini-2025-08-07",
-            tools = self.getInnocentPlayers_tool,
             input = input_message,
             text_format = MafiaPick,
         )
@@ -308,46 +199,29 @@ class GPTPlayer(Player):
         self.token_usage += response.usage.total_tokens
 
         for player in innocentPlayers:
-            if player is not None and player.getName() == response.output_parsed.your_pick:
+            if player is not None and player.getName() == response.output_parsed.your_pick.name:
                 logger.debug('GPTPlayer picked target: ' + player.getName())
                 return player
             
-        logger.debug('Uh oh, GPTPlayer picked a non-innocent or dead player as target: ' + response.output_parsed.your_pick)
+        logger.debug('Uh oh, GPTPlayer picked a non-innocent or dead player as target: ' + response.output_parsed.your_pick.name)
         raise ValueError('No player was picked as target by GPTPlayer')
+    
     
     async def investigatePlayer(self, alivePlayers: list["Player"], convo: str) -> None:
         if self.role != Roles.PlayerRole.SHERIFF:
             raise ValueError("Only Sheriff can investigate players.")
 
+        player_list = [player.getName() for player in alivePlayers]
+        players = Enum('players', player_list)
+
         input_message = self.makeInputMessage(self.investigating_player_message, convo)
 
         class SheriffPick(BaseModel):
-            your_pick: str
+            your_pick: players
 
         response = await self.client.responses.parse(
+            conversation = self.convoID,
             model = "gpt-5-mini-2025-08-07",
-            tools = self.alivePlayers_tool,
-            input = input_message,
-            text_format = SheriffPick,
-        )
-
-        input_message += response.output
-
-        for item in response.output:
-            if item.type == "function_call" and item.name == "get_alive_players":
-                alive_players = [player.getName() for player in alivePlayers]
-
-                input_message.append({
-                    "type": "function_call_output",
-                    "call_id": item.call_id,
-                    "output": json.dumps({
-                        "alive_players": alive_players
-                    })
-                })
-
-        response = await self.client.responses.parse(
-            model = "gpt-5-mini-2025-08-07",
-            tools = self.alivePlayers_tool,
             input = input_message,
             text_format = SheriffPick,
         )
@@ -355,46 +229,28 @@ class GPTPlayer(Player):
         self.token_usage += response.usage.total_tokens
 
         for player in alivePlayers:
-            if player.getName() == response.output_parsed.your_pick:
+            if player.getName() == response.output_parsed.your_pick.name:
                 logger.debug('GPTPlayer investigated: ' + player.getName())
                 return player
             
-        logger.debug('Uh oh, GPTPlayer investigated a non-existent or dead player: ' + response.output_parsed.your_pick)
+        logger.debug('Uh oh, GPTPlayer investigated a non-existent or dead player: ' + response.output_parsed.your_pick.name)
         raise ValueError('No player was investigated by GPTPlayer')
 
     async def getDoctorPick(self, alivePlayers: list["Player"], convo: str) -> "Player":
         if self.role != Roles.PlayerRole.DOCTOR:
             raise ValueError("Only Doctor can pick a target.")
+        
+        player_list = [player.getName() for player in alivePlayers]
+        players = Enum('players', player_list)
             
         input_message = self.makeInputMessage(self.doctor_protecting_message, convo)
 
         class DoctorPick(BaseModel):
-            your_pick: str
+            your_pick: players
 
         response = await self.client.responses.parse(
+            conversation = self.convoID,
             model = "gpt-5-mini-2025-08-07",
-            tools = self.alivePlayers_tool,
-            input = input_message,
-            text_format = DoctorPick,
-        )
-
-        input_message += response.output
-
-        for item in response.output:
-            if item.type == "function_call" and item.name == "get_alive_players":
-                alive_players = [player.getName() for player in alivePlayers]
-
-                input_message.append({
-                    "type": "function_call_output",
-                    "call_id": item.call_id,
-                    "output": json.dumps({
-                        "alive_players": alive_players
-                    })
-                })
-
-        response = await self.client.responses.parse(
-            model = "gpt-5-mini-2025-08-07",
-            tools = self.alivePlayers_tool,
             input = input_message,
             text_format = DoctorPick,
         )
@@ -402,40 +258,51 @@ class GPTPlayer(Player):
         self.token_usage += response.usage.total_tokens
 
         for player in alivePlayers:
-            if player.getName() == response.output_parsed.your_pick:
+            if player.getName() == response.output_parsed.your_pick.name:
                 logger.debug('GPTPlayer (Doctor) is protecting: ' + player.getName())
                 return player
             
-        logger.debug('Uh oh, GPTPlayer investigated a non-existent or dead player: ' + response.output_parsed.your_pick)
+        logger.debug('Uh oh, GPTPlayer investigated a non-existent or dead player: ' + response.output_parsed.your_pick.name)
         raise ValueError('No player was investigated by GPTPlayer')
     
-    def makeInputMessage(self, inputAddition: str, convo: str) -> list[dict]:
+    def makeInputMessage(self, inputAddition: str, convo: list[str]) -> list[dict]:
         self.checkTokenUsage()
+        
+        input_msg = '\n'.join(convo[self.convoIndex + 1:]) + '\n' + inputAddition # Plus one to not repeat myself.
+        self.convoIndex = len(convo)
 
-        switcher = {
-            Roles.PlayerRole.INNOCENT: self.developer_message_innocent,
-            Roles.PlayerRole.MAFIA: self.developer_message_mafia,
-            Roles.PlayerRole.DOCTOR: self.developer_message_doctor,
-            Roles.PlayerRole.SHERIFF: self.developer_message_sheriff,
-        }
-
-        input_message = [
-            {
-                "role": "developer",
-                "content": switcher.get(self.role, self.developer_message_innocent),
-            },
+        return [
             {
                 "role": "user",
-                "content": self.privateSumm + '\n' + convo + '\n' + inputAddition + ' Keep your response within 30 words.',
+                "content": input_msg,
             },
         ]
-
-        return input_message
+        
+    async def updatePrivSumm(self, summ):
+        msg = [
+            {
+                "role": "user",
+                "content": summ,
+            }
+        ]
+        
+        await self.client.conversations.items.create(
+            conversation_id = self.convoID,
+            items = msg,
+        )
+        
+    
+    async def getConversation(self):
+        page = await self.client.conversations.items.list(self.convoID)
+        
+        return page.data
+            
     
     def checkTokenUsage(self) -> None:
-        if self.token_usage > 15000:
+        if self.token_usage > 100000:
             logger.warning(f'GPTPlayer {self.getName()} has used {self.token_usage} tokens and is over the limit')
             raise ValueError(f'GPTPlayer {self.getName()} has exceeded the token usage limit.')
+        
         
     def getTokenUsage(self) -> int:
         return self.token_usage

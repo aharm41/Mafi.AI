@@ -44,7 +44,7 @@ class WSPlayer(Player):
         if self.frontEndConnector is None:
             raise ValueError('No Web socket is attached yet to the Player class')
         
-        choice = await self.frontEndConnector.ask_for_select('Who\'s your final choice?', [p.getName() if p is not None else 'None' for p in votedPlayers])
+        choice = await self.frontEndConnector.ask_for_select('Who\'s your final choice?', [p.getName() for p in votedPlayers] + ['None'])
         if choice == 'None':
             return None
         

@@ -29,29 +29,20 @@ tool = [
 
 input_message = [
     {
+    "role": "system",
+    "content": "You are playing a game of Mafia. There are 9 players. You have been given the role of Innocent. Your name is Pirate Pete. Talk like a pirate",
+    },
+    {
     "role": "developer",
-    "content": "You are playing a game of Mafia. There are 9 players. You have been given the role of Innocent. Your name is Pirate Pete. Talk like a pirate.",
+    "content": "Keep your response within 70 words"
     },
     {
     "role": "user",
-    "content": "This is what happend in the Mafia game so far: " \
-    'Night 1: ' \
-    'Player 1 was killed by the Mafia. ' \
-    'Day 2: ' \
-    'Player 1 says: Hey guys, I think its Player 9. ' \
-    'Player 4 says: Hey guys! I like men. '
-    'Player 7 makes his/her defense: I am not part of the Mafia! I swear it! ' \
-    'Night 2: ' \
-    'Player 6 was killed by the Mafia. ' \
-    'Day 3: ' \
-    'Player 7 makes his/her defense: I am not part of the Mafia! I swear it! ' \
-    'Night 3: ' \
-    'Player 4 was killed by the Mafia. ' \
-    'Day 4: ' \
-    'Player 3 makes his/her defense: I am not part of the Mafia! I swear it! ' \
-    'Now its your turn to speak. You may or may not accuse one or multiple players. ' \
-    'You can only accuse alive players.' \
-    'Keep your response within 30 words.',
+    "content": """
+    Night 1: Player 1 was killed by the Mafia.
+    Flabby Frank says: Hey guys, I think it's Peculiar Polly.
+    Peculiar Polly says: Nah, I think it's Flabby Frank!
+    """
     }
 ]
 
@@ -79,14 +70,49 @@ input_message = [
 
 # print(input_message)
 
-response = client.responses.parse(
+
+
+# response = client.responses.parse(
+#     model = "gpt-5-mini-2025-08-07",
+#     # tools = tool,
+#     input = input_message,
+# )
+
+conversation = client.conversations.create(
+    items = input_message
+)
+
+id = conversation.id
+
+first_response = client.responses.create(
+    conversation = id,
     model = "gpt-5-mini-2025-08-07",
     # tools = tool,
     input = input_message,
-    text_format = ConversationFragment,
 )
 
-print(response.output_parsed)
-print(response.output_parsed.accused.name)
+print(first_response.output)
+
+print(client.conversations.items.list(conversation_id=id))
+
+
+second_response = client.responses.create(
+    conversation=id,
+    model="gpt-5-mini-2025-08-07",
+    input=[
+        {
+            "role": "user",
+            "content": ["Humany player: Hey Pete, I think you're fat and ugly.", "Yo, my penis is kinda small ngl."]
+        }
+    ]
+)
+print('------------------')
+
+print(second_response.output)
+
+print(client.conversations.items.list(conversation_id=id))
+
+# print(response.output_parsed)
+# print(response.output_parsed.accused.name)
 # with open('funnyFile2.txt', 'w') as f:
 #     print(response, file=f)

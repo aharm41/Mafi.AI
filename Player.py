@@ -95,6 +95,9 @@ class Player:
 
     async def updatePrivSumm(self, summ: str) -> None:
         self.privateSumm += summ + "\n"
+        
+    def getRole(self) -> Roles.PlayerRole:
+        return self.role
 
     def getName(self) -> str:
         return self.name
