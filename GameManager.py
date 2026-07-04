@@ -30,6 +30,7 @@ class GameManager:
     Game Manager acts like how mayor would. They control the game,
       intitate day and night phases and assigns roles to players.
     Updates the GameState class if someone is killed.
+    Validates input params and creates the player list with the correct roles.
 
     Init function:
 
@@ -90,7 +91,7 @@ class GameManager:
             playerList.insert(
                 0,
                 WSPlayer(
-                    "Human Player",
+                    "Joe Jensen",
                     inputParams.playerCount - 1,
                     playerRolesList[inputParams.playerCount - 1],
                 ),
@@ -224,6 +225,8 @@ class GameManager:
                 "The village has decided not to lynch anyone today."
             )
             return
+        if votedPlayers[0] is None:
+            votedPlayers = votedPlayers[1:] # In case None is put at the front
 
         votedPlayersConvo = (
             "These players have been voted by the village to be lynched: "
@@ -236,10 +239,13 @@ class GameManager:
         for player in votedPlayers:
             await self.convoManager.addConvo(
                 f"{player.getName()} makes his/her defense: "
-                + await player.makeDefense(
+            )
+             
+            await self.convoManager.addChatConvo(
+                await player.makeDefense(
                     self.gameState.getAlivePlayers(),
                     self.convoManager.getConvoSummary(),
-                )
+                ), player.getName()
             )
 
         await self.convoManager.addConvo("Players now cast their second vote")
@@ -369,6 +375,8 @@ class GameManager:
         await self.initiateAllPlayers(
             self.gameState.getWsPlayers(), self.gameState.getGptPlayers()
         )
+        
+        await self.convoManager.sendAllPlayers([player.getName() for player in self.gameState.getAllPlayers()])
 
         while not self.checkWin():
             await self.nightPhase()
@@ -426,8 +434,8 @@ class GameManager:
             [playerConvo, raisedPlayer] = await nextPlayer.makeConvo(
                 self.convoManager.getConvoSummary(), self.gameState.getAlivePlayers()
             )
-            await self.convoManager.addConvo(
-                f"{nextPlayer.getName()} says: " + playerConvo
+            await self.convoManager.addChatConvo(
+                playerConvo, nextPlayer.getName()
             )
             # if raisedPlayer is not None:
             #     talkQueue.appendleft(raisedPlayer)
@@ -437,14 +445,16 @@ class GameManager:
         await self.convoManager.addConvo("Voting now begins.")
 
     async def murderPlayer(self, player: Player) -> None:
-        await self.convoManager.addConvo(
-            f"{player.getName()} was brutally murdered by the Mafia. The players role was: {player.role.value}"
+        await self.convoManager.addKillConvo(
+            f"{player.getName()} was brutally murdered by the Mafia. The players role was: {player.role.value}",
+            player.getName()
         )
         self.gameState.killPlayer(player)
 
     async def lynchPlayer(self, player: Player) -> None:
-        await self.convoManager.addConvo(
-            f"{player.getName()} was voted by the village and has been lynched! The players role was: {player.role.value}"
+        await self.convoManager.addKillConvo(
+            f"{player.getName()} was voted by the village and has been lynched! The players role was: {player.role.value}",
+            player.getName()
         )
         self.gameState.killPlayer(player)
 

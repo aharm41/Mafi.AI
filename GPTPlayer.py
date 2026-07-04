@@ -12,6 +12,7 @@ import json
 logger = logging.getLogger('game')
 
 TOKEN_MAX = 100000
+MODEL = "gpt-5.4-mini-2026-03-17"
 
 """
 GPTPlayer class. Inherits from Player. Uses GPT-5 to make decisions.
@@ -89,7 +90,7 @@ class GPTPlayer(Player):
 
         response = await self.client.responses.create(
             conversation = self.convoID,
-            model = "gpt-5-mini-2025-08-07",
+            model = MODEL,
             input = input_message,
         )
 
@@ -110,7 +111,7 @@ class GPTPlayer(Player):
 
         response = await self.client.responses.parse(
             conversation=self.convoID,
-            model = "gpt-5-mini-2025-08-07",
+            model = MODEL,
             input = input_message,
             text_format = PlayerVote,
         )
@@ -142,7 +143,7 @@ class GPTPlayer(Player):
 
         response = await self.client.responses.parse(
             conversation = self.convoID,
-            model = "gpt-5-mini-2025-08-07",
+            model = MODEL,
             input = input_message,
             text_format = PlayerVote,
         )
@@ -167,7 +168,7 @@ class GPTPlayer(Player):
 
         response = await self.client.responses.create(
             conversation = self.convoID,
-            model = "gpt-5-mini-2025-08-07",
+            model = MODEL,
             input = input_message,
         )
 
@@ -191,7 +192,7 @@ class GPTPlayer(Player):
 
         response = await self.client.responses.parse(
             conversation = self.convoID,
-            model = "gpt-5-mini-2025-08-07",
+            model = MODEL,
             input = input_message,
             text_format = MafiaPick,
         )
@@ -221,7 +222,7 @@ class GPTPlayer(Player):
 
         response = await self.client.responses.parse(
             conversation = self.convoID,
-            model = "gpt-5-mini-2025-08-07",
+            model = MODEL,
             input = input_message,
             text_format = SheriffPick,
         )
@@ -250,7 +251,7 @@ class GPTPlayer(Player):
 
         response = await self.client.responses.parse(
             conversation = self.convoID,
-            model = "gpt-5-mini-2025-08-07",
+            model = MODEL,
             input = input_message,
             text_format = DoctorPick,
         )

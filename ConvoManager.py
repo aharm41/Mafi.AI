@@ -58,6 +58,31 @@ class ConvoManager:
             await self.frontend.send_message(convo)
             
         self.convoState.append(convo)
+        
+        
+    async def addChatConvo(self, convo: str, player_name: str) -> None:
+        self.convoSummary += f'[{player_name}]' + convo + '\n'
+        self.lastConvo += f'[{player_name}]' + convo + '\n'
+        if self.frontend is not None:
+            await self.frontend.send_chat_message(convo, player_name)
+            
+        self.convoState.append(f'[{player_name}]: {convo}')
+        
+        
+    async def addKillConvo(self, convo: str, player_name: str) -> None:
+        self.convoSummary += convo + '\n'
+        self.lastConvo += convo + '\n'
+        if self.frontend is not None:
+            await self.frontend.send_message(convo)
+            await self.frontend.report_player_killed(player_name)
+            
+        self.convoState.append(convo)
+        
+        
+    async def sendAllPlayers(self, player_names: list[str]) -> None:
+        if self.frontend is not None:
+            await self.frontend.send_player_list(player_names)
+    
 
     def addToSummary(self, convo: str) -> None:
         self.convoSummary += convo + '\n'

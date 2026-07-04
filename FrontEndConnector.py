@@ -19,8 +19,39 @@ class FrontEndConnector:
     async def send_message(self, message: str) -> None:
         await self.ws.send_text(json.dumps({
             "type": "chat_message",
-            "note": message
+            "note": message,
         }))
+        
+    """
+    Sends a chat message to the front-end with the player name attached
+    """
+    async def send_chat_message(self, message: str, player_name: str) -> None:
+        await self.ws.send_text(json.dumps({
+            "type": "player_chat_message",
+            "note": message,
+            "player": player_name
+        }))
+        
+        
+    """
+    Reports that a player has been killed to the front-end
+    """
+    async def report_player_killed(self, player_name: str) -> None:
+        await self.ws.send_text(json.dumps({
+            "type": "player_killed",
+            "player": player_name
+        }))
+        
+        
+    """
+    Send a list of all the players at the start of the game
+    """
+    async def send_player_list(self, player_names: list[str]) -> None:
+        await self.ws.send_text(json.dumps({
+            "type": "player_list",
+            "players": player_names
+        }))
+    
 
     """
     Asks for a message on the front end and returns the player's response
