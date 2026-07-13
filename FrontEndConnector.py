@@ -12,6 +12,8 @@ class FrontEndConnector:
         self.ws = ws
         self.current_token: str | None = None
         self._lock = asyncio.Lock()
+        while True:
+            
     """
     Sends a message to the front-end
     Logs the player and then the message
@@ -31,7 +33,7 @@ class FrontEndConnector:
             "note": message,
             "player": player_name
         }))
-        
+            
         
     """
     Reports that a player has been killed to the front-end

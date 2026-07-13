@@ -38,9 +38,7 @@ class GameManager:
         playerCount (int): How many players will be playing?
     """
 
-    def __init__(self, inputParams: InputParams, ws: WebSocket = None) -> None:
-        frontEndConnector = FrontEndConnector(ws)
-
+    def __init__(self, inputParams: InputParams, playerSecrets: list[str], broadcastDest: str = None) -> None:
         inputParams.validate()
 
         mafiaCount = inputParams.mafiaCount
@@ -66,16 +64,18 @@ class GameManager:
         doctor = None
         sheriff = None
 
-        for i in range(inputParams.playerCount - 1):
-            playerType = inputParams.players[i]
+        ind = 0
+        for i in range(inputParams.playerCount - len(inputParams.humanPlayers)):
+            playerType = inputParams.players[ind]
             playerList.append(
                 GPTPlayer(
-                    inputParams.players[i].value.name,
-                    i + 1,
+                    inputParams.players[ind].value.name,
+                    ind,
                     playerRolesList[i],
                     playerType.value(),
                 )
             )
+            ind += 1
 
             if playerRolesList[i] == PlayerRole.MAFIA:
                 mafiaList.append(playerList[i])
@@ -87,25 +87,23 @@ class GameManager:
             elif playerRolesList[i] == PlayerRole.DOCTOR:
                 doctor = playerList[i]
 
-        if ws is not None:
-            playerList.insert(
-                0,
-                WSPlayer(
-                    "Joe Jensen",
-                    inputParams.playerCount - 1,
-                    playerRolesList[inputParams.playerCount - 1],
-                ),
+        for ws, name in inputParams.humanPlayers.items():
+            next_player = WSPlayer(
+                name,
+                ind,
+                playerRolesList[ind]
             )
-            playerList[0].attach_frontend(frontEndConnector)
-            if playerRolesList[inputParams.playerCount - 1] == PlayerRole.MAFIA:
-                mafiaList.append(playerList[0])
+            playerList.append(next_player)
+            next_player.attach_frontend(FrontEndConnector(ws))
+            if playerRolesList[ind] == PlayerRole.MAFIA:
+                mafiaList.append(next_player)
             else:
-                innocentList.append(playerList[0])
+                innocentList.append(next_player)
 
-            if playerRolesList[inputParams.playerCount - 1] == PlayerRole.SHERIFF:
-                sheriff = playerList[0]
-            elif playerRolesList[inputParams.playerCount - 1] == PlayerRole.DOCTOR:
-                doctor = playerList[0]
+            if playerRolesList[ind] == PlayerRole.SHERIFF:
+                sheriff = next_player
+            elif playerRolesList[ind] == PlayerRole.DOCTOR:
+                doctor = next_player
 
         logger.info(f"GameManager initialized with {inputParams.playerCount} players.")
         logger.debug(f"Player List: {playerList}")
@@ -116,7 +114,8 @@ class GameManager:
             playerList, innocentList, mafiaList, sheriff, doctor, [playerList[0]]
         )
         self.convoManager = ConvoManager()
-        self.convoManager.attach_frontend(frontEndConnector)
+        for ws_connection in inputParams.humanPlayers.keys():
+            self.convoManager.attach_frontend(FrontEndConnector(ws_connection))
 
     def getGameState(self):
         return self.gameState
