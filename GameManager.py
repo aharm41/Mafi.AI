@@ -1,6 +1,5 @@
 import asyncio
-from fastapi import WebSocket
-from FrontEndConnector import FrontEndConnector
+from ClientRelay import ClientRelay
 from PlayerRoles import PlayerRole
 from Player import Player
 from GPTPlayer import GPTPlayer
@@ -38,7 +37,7 @@ class GameManager:
         playerCount (int): How many players will be playing?
     """
 
-    def __init__(self, inputParams: InputParams, playerSecrets: list[str], broadcastDest: str = None) -> None:
+    def __init__(self, inputParams: InputParams) -> None:
         inputParams.validate()
 
         mafiaCount = inputParams.mafiaCount
@@ -59,6 +58,7 @@ class GameManager:
 
         random.shuffle(playerRolesList)
         playerList = []
+        humanPlayerList = []
         mafiaList = []
         innocentList = []
         doctor = None
@@ -87,14 +87,15 @@ class GameManager:
             elif playerRolesList[i] == PlayerRole.DOCTOR:
                 doctor = playerList[i]
 
-        for ws, name in inputParams.humanPlayers.items():
+        for relay_dest, name in inputParams.humanPlayers.items():
             next_player = WSPlayer(
                 name,
                 ind,
                 playerRolesList[ind]
             )
             playerList.append(next_player)
-            next_player.attach_frontend(FrontEndConnector(ws))
+            humanPlayerList.append(next_player)
+            next_player.attach_frontend(ClientRelay(relay_dest))
             if playerRolesList[ind] == PlayerRole.MAFIA:
                 mafiaList.append(next_player)
             else:
@@ -105,17 +106,17 @@ class GameManager:
             elif playerRolesList[ind] == PlayerRole.DOCTOR:
                 doctor = next_player
 
+            ind += 1
+
         logger.info(f"GameManager initialized with {inputParams.playerCount} players.")
         logger.debug(f"Player List: {playerList}")
         logger.debug(f"Innocent List: {innocentList}")
         logger.debug(f"Mafia List: {mafiaList}")
 
         self.gameState = GameState(
-            playerList, innocentList, mafiaList, sheriff, doctor, [playerList[0]]
+            playerList, innocentList, mafiaList, sheriff, doctor, humanPlayerList
         )
-        self.convoManager = ConvoManager()
-        for ws_connection in inputParams.humanPlayers.keys():
-            self.convoManager.attach_frontend(FrontEndConnector(ws_connection))
+        self.convoManager = ConvoManager(ClientRelay(inputParams.broadcastDest))
 
     def getGameState(self):
         return self.gameState
@@ -463,13 +464,13 @@ class GameManager:
     Params:
         frontEndPlayers (list[WSPlayer]): List of WSPlayers to initiate
 
-    FRONT END PLAYERS MUST HAVE A FONRT END CONNECTOR ATTACHED BEFORE CALLING THIS FUNCTION
+    FRONT END PLAYERS MUST HAVE A CLIENT RELAY ATTACHED BEFORE CALLING THIS FUNCTION
     """
 
     async def initiateWSPlayers(self, frontEndPlayers: list[WSPlayer]) -> None:
         for player in frontEndPlayers:
-            if player.frontEndConnector is None:
-                raise ValueError("No Web socket is attached yet to the Player class")
+            if player.clientRelay is None:
+                raise ValueError("No ClientRelay is attached to the player")
 
             await player.updatePrivSumm(f"Your role is: {player.role.value}\n")
 
@@ -520,8 +521,8 @@ class GameManager:
         self, frontEndPlayers: list[WSPlayer], winningRole: str
     ) -> None:
         for player in frontEndPlayers:
-            if player.frontEndConnector is None:
-                raise ValueError("No Web socket is attached yet to the Player class")
+            if player.clientRelay is None:
+                raise ValueError("No ClientRelay is attached to the player")
 
             if winningRole == PlayerRole.MAFIA.value:
                 for players in frontEndPlayers:

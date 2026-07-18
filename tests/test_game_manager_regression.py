@@ -1,4 +1,3 @@
-import json
 
 import pytest
 
@@ -9,15 +8,27 @@ from Player import Player
 from PlayerRoles import PlayerRole
 
 
-class DummyWebSocket:
-    def __init__(self) -> None:
-        self.messages: list[str] = []
+class RecordingClientRelay:
+    messages: list[dict] = []
 
-    async def send_text(self, message: str) -> None:
-        self.messages.append(message)
+    def __init__(self, dest: str) -> None:
+        self.dest = dest
 
-    async def receive_text(self) -> str:
-        raise AssertionError("receive_text should not be called in this regression path.")
+    async def send_message(self, message: str) -> None:
+        self.messages.append({"type": "chat_message", "note": message})
+
+    async def send_chat_message(self, message: str, player_name: str) -> None:
+        self.messages.append({
+            "type": "player_chat_message",
+            "note": message,
+            "player": player_name,
+        })
+
+    async def report_player_killed(self, player_name: str) -> None:
+        self.messages.append({"type": "player_killed", "player": player_name})
+
+    async def send_player_list(self, player_names: list[str]) -> None:
+        self.messages.append({"type": "player_list", "players": player_names})
 
 
 class ScriptedGPTPlayer(Player):
@@ -78,6 +89,8 @@ class ScriptedGPTPlayer(Player):
 async def test_game_loop_reaches_mafia_win_and_emits_game_over_message(monkeypatch) -> None:
     monkeypatch.setattr(game_manager_module, "GPTPlayer", ScriptedGPTPlayer)
     monkeypatch.setattr(game_manager_module.random, "shuffle", lambda _: None)
+    monkeypatch.setattr(game_manager_module, "ClientRelay", RecordingClientRelay)
+    RecordingClientRelay.messages.clear()
 
     async def ws_make_convo(self, convo: list[str], alivePlayers: list[Player]):
         return ("I am listening.", None)
@@ -102,6 +115,7 @@ async def test_game_loop_reaches_mafia_win_and_emits_game_over_message(monkeypat
 
     params = InputParams(
         playerCount=6,
+        humanPlayers={"player:test:host": "Host"},
         playerTypes=[
             PlayerType.Default_Derrick,
             PlayerType.Refined_Reginald,
@@ -110,9 +124,9 @@ async def test_game_loop_reaches_mafia_win_and_emits_game_over_message(monkeypat
             PlayerType.Peculiar_Polly,
         ],
         mafiaCount=2,
+        broadcastDest="game:test",
     )
-    ws = DummyWebSocket()
-    manager = game_manager_module.GameManager(inputParams=params, ws=ws)
+    manager = game_manager_module.GameManager(inputParams=params)
 
     await manager.gameLoop()
 
@@ -120,7 +134,7 @@ async def test_game_loop_reaches_mafia_win_and_emits_game_over_message(monkeypat
     assert state.getWinningRole() == PlayerRole.MAFIA.value
     assert len(state.getDeadPlayers()) >= 1
 
-    payloads = [json.loads(message) for message in ws.messages]
+    payloads = RecordingClientRelay.messages
     payload_types = {payload["type"] for payload in payloads}
 
     assert "player_list" in payload_types
@@ -131,3 +145,33 @@ async def test_game_loop_reaches_mafia_win_and_emits_game_over_message(monkeypat
         and "Game Over! The Mafia have won!" in payload.get("note", "")
         for payload in payloads
     )
+
+def test_multiple_human_players_receive_unique_numbers_and_correct_ws_classification(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(game_manager_module, "GPTPlayer", ScriptedGPTPlayer)
+    monkeypatch.setattr(game_manager_module, "ClientRelay", RecordingClientRelay)
+    monkeypatch.setattr(game_manager_module.random, "shuffle", lambda _: None)
+
+    params = InputParams(
+        playerCount=4,
+        humanPlayers={
+            "player:test:host": "Host",
+            "player:test:guest": "Guest",
+        },
+        playerTypes=[
+            PlayerType.Default_Derrick,
+            PlayerType.Refined_Reginald,
+        ],
+        mafiaCount=1,
+        broadcastDest="game:test",
+    )
+
+    manager = game_manager_module.GameManager(inputParams=params)
+    players = manager.getGameState().getAllPlayers()
+    ws_players = manager.getGameState().getWsPlayers()
+
+    assert [player.number for player in players] == [0, 1, 2, 3]
+    assert [player.getName() for player in ws_players] == ["Host", "Guest"]
+    assert all(player in players for player in ws_players)
+

@@ -2,16 +2,16 @@ from Player import Player
 from GPTPlayer import GPTPlayer
 from PlayerRoles import PlayerRole
 from GPTProfiles import PlayerType
-from fastapi import WebSocket
 
 class InputParams():
-    def __init__(self, playerCount, humanPlayers: dict[WebSocket, str], playerTypes: list[PlayerType], mafiaCount = None):
+    def __init__(self, playerCount, humanPlayers: dict[str, str], playerTypes: list[PlayerType], mafiaCount = None, broadcastDest: str = None):
         self.playerCount = playerCount
         self.humanPlayers = humanPlayers
         self.players = playerTypes
         self.mafiaCount = mafiaCount if mafiaCount is not None else max(1, playerCount // 4)
         self.doctorCount = 1
         self.sheriffCount = 1
+        self.broadcastDest = broadcastDest
 
 
     def validate(self) -> None:

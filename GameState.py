@@ -27,7 +27,7 @@ class GameState:
         self.sheriffDead = False
         self.doctor = doctor
         self.doctorDead = False
-        self.deadPlayers: dict[Player, int] = {}  # Trackes date of death
+        self.deadPlayers: dict[Player, int] = {}  # Tracks date of death
         self.currentDay = 1
         self.protectedPlayer = None  # Might need to change this to a list at some point
         self.winningRole = None

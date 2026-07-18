@@ -9,7 +9,9 @@ if str(GAME_LOGIC_DIR) not in sys.path:
 
 
 # Allow imports of GPTPlayer/GameManager in environments without optional deps.
-if "openai" not in sys.modules:
+try:
+    import openai  # noqa: F401
+except ImportError:
     fake_openai = types.ModuleType("openai")
 
     class _DummyOpenAIClient:
@@ -21,7 +23,9 @@ if "openai" not in sys.modules:
     sys.modules["openai"] = fake_openai
 
 
-if "fastapi" not in sys.modules:
+try:
+    import fastapi  # noqa: F401
+except ImportError:
     fake_fastapi = types.ModuleType("fastapi")
 
     class _DummyWebSocket:
@@ -31,7 +35,9 @@ if "fastapi" not in sys.modules:
     sys.modules["fastapi"] = fake_fastapi
 
 
-if "pydantic" not in sys.modules:
+try:
+    import pydantic  # noqa: F401
+except ImportError:
     fake_pydantic = types.ModuleType("pydantic")
 
     class _DummyBaseModel:

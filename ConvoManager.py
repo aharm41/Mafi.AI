@@ -1,9 +1,5 @@
-from FrontEndConnector import FrontEndConnector
-from Player import Player
-from PlayerRoles import PlayerRole
-from fastapi import WebSocket
+from ClientRelay import ClientRelay
 import logging
-import asyncio
 
 logger = logging.getLogger('game')
 
@@ -18,15 +14,11 @@ class ConvoManager:
     NOT at the end of a night.
     """
 
-    def __init__(self):
-        self.lastConvo = ''
-        self.convoSummary = ''
-        self.frontend = []
-        
+    def __init__(self, client_relay: ClientRelay):
+        self.lastConvo = ""
+        self.convoSummary = ""
+        self.client_relay = client_relay
         self.convoState = []
-
-    def attach_frontend(self, frontEndConnector: FrontEndConnector):
-        self.frontend.append(frontEndConnector)
 
     def getLastConvo(self) -> str | None:
         return self.lastConvo
@@ -55,7 +47,7 @@ class ConvoManager:
     async def addConvo(self, convo: str) -> None:
         self.convoSummary += convo + '\n'
         self.lastConvo += convo + '\n'
-        await asyncio.gather(*[frontend.send_message(convo) for frontend in self.frontend])
+        await self.client_relay.send_message(convo)
             
             
         self.convoState.append(convo)
@@ -64,21 +56,21 @@ class ConvoManager:
     async def addChatConvo(self, convo: str, player_name: str) -> None:
         self.convoSummary += f'[{player_name}]' + convo + '\n'
         self.lastConvo += f'[{player_name}]' + convo + '\n'
-        await asyncio.gather(*[frontend.send_chat_message(convo, player_name) for frontend in self.frontend])
+        await self.client_relay.send_chat_message(convo, player_name)
         self.convoState.append(f'[{player_name}]: {convo}')
         
         
     async def addKillConvo(self, convo: str, player_name: str) -> None:
         self.convoSummary += convo + '\n'
         self.lastConvo += convo + '\n'
-        await asyncio.gather(*[frontend.send_message(convo) for frontend in self.frontend])
-        await asyncio.gather(*[frontend.report_player_killed(player_name) for frontend in self.frontend])
+        await self.client_relay.send_message(convo)
+        await self.client_relay.report_player_killed(player_name)
 
         self.convoState.append(convo)
         
         
     async def sendAllPlayers(self, player_names: list[str]) -> None:
-        await asyncio.gather(*[frontend.send_player_list(player_names) for frontend in self.frontend])
+        await self.client_relay.send_player_list(player_names)
     
 
     def addToSummary(self, convo: str) -> None:

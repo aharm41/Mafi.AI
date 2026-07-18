@@ -1,16 +1,16 @@
-import uuid
-import json
-from Player import Player
 import asyncio
+import json
 import logging
 import os
+
 from redis.asyncio import Redis
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_TLS = os.getenv("REDIS_TLS", "false").lower() == "true"
 
-logger = logging.getLogger('game')
+logger = logging.getLogger("game")
+
 
 class ClientRelay:
     def __init__(self, dest: str):
@@ -18,122 +18,78 @@ class ClientRelay:
             host=REDIS_HOST,
             port=REDIS_PORT,
             ssl=REDIS_TLS,
-            decode_response=True,
+            decode_responses=True,
         )
-        
-        self.pubsub = self.redis.pubsub()
-        self.pubsub.subscribe(dest)
-        
         self.dest = dest
-        self.current_token: str | None = None
+        self.pubsub = self.redis.pubsub()
+        self._subscribed = False
         self._lock = asyncio.Lock()
-        
-        
-    """
-    Sends a message to the front-end
-    Logs the player and then the message    
-    """
+
+    async def _ensure_subscribed(self) -> None:
+        if not self._subscribed:
+            await self.pubsub.subscribe(f"{self.dest}:in")
+            self._subscribed = True
+
+    async def _publish(self, payload: dict) -> None:
+        await self.redis.publish(f"{self.dest}:out", json.dumps(payload))
+
+    async def _receive(self, expected_type: str, timeout: float = 60) -> dict | None:
+        await self._ensure_subscribed()
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:
+            raw = await self.pubsub.get_message(
+                ignore_subscribe_messages=True,
+                timeout=min(1, max(0, deadline - loop.time())),
+            )
+            if raw is None:
+                await asyncio.sleep(0.02)
+                continue
+            payload = json.loads(raw["data"])
+            if payload.get("type") == expected_type:
+                return payload
+        return None
+
     async def send_message(self, message: str) -> None:
-        logger.debug(f"send_message called with message: {message}")
-        
-        await self.redis.publish(self.dest, json.dumps({
-            "type": "chat_message",
-            "note": message,
-        }))
-        
-        
-    """
-    Sends a chat message to the front-end with the player name attached
-    """
+        await self._publish({"type": "chat_message", "note": message})
+
     async def send_chat_message(self, message: str, player_name: str) -> None:
-        logger.debug(f"send_chat_message called with message: {message} and player_name: {player_name}")
-        
-        await self.redis.publish(self.dest, json.dumps({
+        await self._publish({
             "type": "player_chat_message",
             "note": message,
-            "player": player_name
-        }))
-        
-        
-    """
-    Reports that a player has been killed to the front-end
-    """
+            "player": player_name,
+        })
+
     async def report_player_killed(self, player_name: str) -> None:
-        await self.redis.publish(self.dest, json.dumps({
-            "type": "player_killed",
-            "player": player_name
-        }))
-        
-        
-    """
-    Send a list of all the players at the start of the game
-    """
+        await self._publish({"type": "player_killed", "player": player_name})
+
     async def send_player_list(self, player_names: list[str]) -> None:
-        await self.redis.publish(self.dest, json.dumps({
-            "type": "player_list",
-            "players": player_names
-        }))
-    
+        await self._publish({"type": "player_list", "players": player_names})
 
-    """
-    Asks for a message on the front end and returns the player's response
-    """
     async def ask_for_message(self, prompt: str) -> str:
-        logger.debug(f"ask_for_message called with prompt: {prompt}")
-        while True:
-            await self.redis.publish(self.dest, json.dumps({
-                "type": "prompt_for_message",
-                "prompt": prompt,
-            }))
-            
-            raw = await self.pubsub.get_message(ignore_subscribe_messages=True, timeout=60)
-            
-            if raw is None:
-                logger.error("No response received for ask_for_message")
-                return ''
-            
-            data = json.loads(raw)
-            
-            if data.get("type") != "client_message":
-                await self.redis.publish(self.dest, json.dumps({
-                    "type": "error",
-                    "detail": "Invalid message type"
-                }))
-                return ''
-            
-            text = (data.get("text") or "").strip()
-                        
-            if len(text) > 200:
-                await self.redis.publish(self.dest, json.dumps({
-                    "type": "error",
-                    "detail": "Message too long, please keep below 200 charaacters"
-                }))
-                continue
-            
-            return text
-   
-    
+        async with self._lock:
+            await self._ensure_subscribed()
+            await self._publish({"type": "prompt_for_message", "prompt": prompt})
+            response = await self._receive("client_message")
+            if response is None:
+                return ""
+            text = (response.get("text") or "").strip()
+            return text if len(text) <= 200 else ""
+
     async def ask_for_select(self, prompt: str, options: list[str]) -> str:
-        logger.debug(f"ask_for_select called with prompt: {prompt} and options: {options}")
-        await self.redis.publish(self.dest, json.dumps({
-            "type": "prompt_select",
-            "prompt": prompt,
-            "options": options,
-        }))
+        async with self._lock:
+            await self._ensure_subscribed()
+            await self._publish({
+                "type": "prompt_select",
+                "prompt": prompt,
+                "options": options,
+            })
+            response = await self._receive("client_select")
+            if response is None:
+                return ""
+            value = (response.get("value") or "").strip()
+            return value if value in options else ""
 
-        logger.debug("Message sent! Waiting for client selection...")
-
-        raw = await self.pubsub.get_message()
-        data = json.loads(raw)
-
-        if data.get("type") != "client_select":
-            await self.redis.publish(self.dest, json.dumps({"type": "error", "detail": "Invalid message type"}))
-            return ""
-
-        value = (data.get("value") or "").strip()
-
-        if value not in options:
-            await self.redis.publish(self.dest, json.dumps({"type": "error", "detail": "Invalid selection"}))
-            return ""
-
-        return value
+    async def close(self) -> None:
+        await self.pubsub.aclose()
+        await self.redis.aclose()

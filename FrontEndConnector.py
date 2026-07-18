@@ -7,6 +7,12 @@ import logging
 
 logger = logging.getLogger('game')
 
+"""
+NO LONGER NEEDED.
+The game app communicates with the Valkey cache now, not directly to the
+frontend. See 'ClientRelay.py' for the new version.
+"""
+
 class FrontEndConnector:
     def __init__(self, ws: WebSocket):
         self.ws = ws
