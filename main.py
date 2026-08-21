@@ -10,10 +10,10 @@ from GPTProfiles import PlayerType
 from InputParams import InputParams
 
 logger = logging.getLogger("web_log")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 if not logger.handlers:
     handler = logging.FileHandler("web.log")
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(logging.INFO)
     logger.addHandler(handler)
 
 
@@ -27,6 +27,11 @@ class StartGameRequest(BaseModel):
 
 
 app = FastAPI()
+
+
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy"}
 
 
 @app.post("/api/start_game")

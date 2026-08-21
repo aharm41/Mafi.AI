@@ -6,9 +6,9 @@ from redis.asyncio import Redis
 
 logger = logging.getLogger("game_lifecycle")
 
-VALKEY_HOST = os.getenv("VALKEY_HOST", "localhost")
-VALKEY_PORT = int(os.getenv("VALKEY_PORT", 6379))
-VALKEY_TLS = os.getenv("VALKEY_TLS", "false").lower() == "true"
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_TLS = os.getenv("REDIS_TLS", "false").lower() == "true"
 
 
 class GameLoop(Protocol):
@@ -23,9 +23,9 @@ async def run_game_and_cleanup(game_manager: GameLoop, game_id: str) -> None:
         logger.exception("Game %s terminated with an error", game_id)
     finally:
         cache = Redis(
-            host=VALKEY_HOST,
-            port=VALKEY_PORT,
-            ssl=VALKEY_TLS,
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            ssl=REDIS_TLS,
             decode_responses=True,
         )
         try:

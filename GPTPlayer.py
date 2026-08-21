@@ -7,7 +7,10 @@ from enum import Enum
 from typing import Optional
 from openai import AsyncOpenAI
 from pydantic import BaseModel
+import boto3
+from botocore.exceptions import ClientError
 import json
+import os
 
 logger = logging.getLogger('game')
 
@@ -48,8 +51,10 @@ class GPTPlayer(Player):
         role: Roles.PlayerRole = Roles.PlayerRole.INNOCENT,
         profile: BaseGPTConfig = BaseGPTConfig()
     ) -> None:
+        AWS_KEY = GPTPlayer.getKey()
+        API_KEY = AWS_KEY if AWS_KEY is not None else os.getenv("OPENAI_API_KEY")
         super().__init__(name, number, role)
-        self.client = AsyncOpenAI()
+        self.client = AsyncOpenAI(api_key=API_KEY)
 
         match role:
             case Roles.PlayerRole.INNOCENT:
@@ -307,3 +312,28 @@ class GPTPlayer(Player):
         
     def getTokenUsage(self) -> int:
         return self.token_usage
+    
+    
+    def getKey():
+        secret_name = "OPENAI_API_KEY"
+        region_name = "ap-southeast-2"
+        
+        try:
+            session = boto3.session.Session()
+            client = session.client(
+                service_name='secretsmanager',
+                region_name=region_name
+            )
+            
+            response = client.get_secret_value(
+                SecretId=secret_name
+            )
+            
+            secret_data = json.loads(response["SecretString"])
+            secret = secret_data["OPENAI_API_KEY"]
+            
+        except Exception as e:
+            print(f"Error retrieving secret: {e}")
+            return None
+        
+        return secret
