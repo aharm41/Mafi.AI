@@ -13,7 +13,7 @@ async def run_game(game: GameManager):
 if __name__ == "__main__":
     logger = logging.getLogger('game')
     logging.basicConfig(level=logging.DEBUG)
-    fh = logging.FileHandler('game.log')
+    fh = logging.FileHandler('sys.stderr')
     fh.setLevel(logging.DEBUG)
     logger.addHandler(fh)
 

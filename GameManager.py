@@ -18,7 +18,7 @@ from WSPlayer import WSPlayer
 logger = logging.getLogger("game")
 logger.setLevel(logging.DEBUG)
 
-fh = logging.FileHandler("game.log")
+fh = logging.FileHandler("sys.stderr")
 fh.setLevel(logging.DEBUG)
 
 logger.addHandler(fh)
