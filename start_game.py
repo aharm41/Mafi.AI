@@ -7,8 +7,20 @@ from ClientRelay import ClientRelay
 import asyncio
 import uuid
 
+MINUTES=20
+
 async def run_game(game: GameManager):
     await game.gameLoop()
+
+
+async def run_game_with_timeout(game: GameManager, timeout: int):
+    try:
+        await asyncio.wait_for(run_game(game), timeout=timeout)
+    except asyncio.TimeoutError:
+        logging.error(f"Game timed out after {timeout/60} minutes")
+        # Handle the timeout, e.g., notify players, clean up resources, etc.
+        await game.handle_timeout()
+
 
 if __name__ == "__main__":
     logger = logging.getLogger('game')
@@ -31,7 +43,6 @@ if __name__ == "__main__":
     
     for player in ws:
         player_id = uuid.uuid4().hex
-        
     
     logger.debug(f"Starting game with data: {data}")
 
@@ -39,4 +50,4 @@ if __name__ == "__main__":
     
     game = GameManager(inputParams, ws, )
     
-    asyncio.run(run_game(game))
+    run_game_with_timeout(game, timeout=MINUTES * 60)
